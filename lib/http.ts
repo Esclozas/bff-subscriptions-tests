@@ -11,41 +11,38 @@ export class HttpError extends Error {
 
 export async function upstream(path: string, init?: RequestInit) {
   const base = process.env.UPSTREAM_API_BASE_URL;
-  const token = process.env.UPSTREAM_API_TOKEN;
+  if (!base) throw new Error('UPSTREAM_API_BASE_URL is not set');
 
-  if (!base) {
-    throw new Error('UPSTREAM_API_BASE_URL is not set');
-  }
+  const token = process.env.UPSTREAM_API_TOKEN || '';
+  const authHeaderName = (process.env.UPSTREAM_AUTH_HEADER || 'Authorization').trim();
+  const authScheme = (process.env.UPSTREAM_AUTH_SCHEME || 'Bearer').trim();
+
+  const apiKey = process.env.UPSTREAM_API_KEY || '';
+  const clientId = process.env.UPSTREAM_CLIENT_ID || '';
+  const tenant = process.env.UPSTREAM_TENANT || '';
 
   const headers: HeadersInit = {
-    'Content-Type': 'application/json',
-    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    Accept: 'application/json',
     ...(init?.headers || {}),
   };
+
+  if (token) {
+    headers[authHeaderName] = authScheme ? `${authScheme} ${token}` : token;
+  }
+  if (apiKey) headers['X-API-Key'] = apiKey;
+  if (clientId) headers['X-Client-Id'] = clientId;
+  if (tenant) headers['X-Tenant'] = tenant;
 
   const url = `${base}${path}`;
   const res = await fetch(url, { ...init, headers, cache: 'no-store' });
 
-  // Lis la réponse une seule fois
   const text = await res.text().catch(() => '');
-
-  // Essaie de parser JSON, sinon garde le texte brut
   let data: unknown = undefined;
-  try {
-    data = text ? JSON.parse(text) : undefined;
-  } catch {
-    data = text || undefined;
-  }
+  try { data = text ? JSON.parse(text) : undefined; } catch { data = text || undefined; }
 
   if (!res.ok) {
-    // Évite ?? + || en même temps → calcule un body d’erreur propre
-    const body = (data !== undefined && data !== null && data !== '')
-      ? data
-      : (text || res.statusText);
-
+    const body = (data !== undefined && data !== null && data !== '') ? data : (text || res.statusText);
     throw new HttpError(res.status, body);
   }
-
-  // Retourne JSON si dispo, sinon objet vide
   return (data ?? {}) as any;
 }
