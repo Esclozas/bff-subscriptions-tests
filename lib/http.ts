@@ -20,23 +20,32 @@ export async function upstream(path: string, init?: RequestInit) {
   const headers: HeadersInit = {
     'Content-Type': 'application/json',
     ...(token ? { Authorization: `Bearer ${token}` } : {}),
-    ...(init?.headers || {})
+    ...(init?.headers || {}),
   };
 
   const url = `${base}${path}`;
   const res = await fetch(url, { ...init, headers, cache: 'no-store' });
 
+  // Lis la réponse une seule fois
   const text = await res.text().catch(() => '');
+
+  // Essaie de parser JSON, sinon garde le texte brut
   let data: unknown = undefined;
   try {
     data = text ? JSON.parse(text) : undefined;
   } catch {
-    data = text;
+    data = text || undefined;
   }
 
   if (!res.ok) {
-    throw new HttpError(res.status, data ?? text || res.statusText);
+    // Évite ?? + || en même temps → calcule un body d’erreur propre
+    const body = (data !== undefined && data !== null && data !== '')
+      ? data
+      : (text || res.statusText);
+
+    throw new HttpError(res.status, body);
   }
 
+  // Retourne JSON si dispo, sinon objet vide
   return (data ?? {}) as any;
 }
