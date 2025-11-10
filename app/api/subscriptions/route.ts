@@ -1,83 +1,37 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { z } from 'zod';
-import { sql } from '@/lib/db';
-import { ExtraRow, flattenItem, searchable } from '@/lib/subscriptions';
+import { NextResponse } from "next/server";
 
-const QuerySchema = z.object({
-  q: z.string().optional(),
-  status: z.string().optional(),
-  teamId: z.string().uuid().optional(),
-  ownerId: z.string().uuid().optional(),
-  productId: z.string().uuid().optional(),
-  from: z.string().datetime().optional(),
-  to: z.string().datetime().optional(),
-  sort: z.enum(['createdDate','status','productName','teamName']).default('createdDate'),
-  order: z.enum(['asc','desc']).default('desc'),
-  limit: z.coerce.number().min(1).max(100).default(20),
-  offset: z.coerce.number().min(0).default(0),
-});
-
-function authHeaders() {
-  const h: Record<string,string> = { 'Content-Type': 'application/json' };
-  if (process.env.SOURCE_API_TOKEN) {
-    h.Authorization = process.env.SOURCE_API_TOKEN;
+export async function GET() {
+  const res = await fetch(
+  "https://developv4.kyc34.com/service-person/v1/persons/clients/operations/subscriptions/overview?page=0&size=5&sort=updatedDate,desc",
+  {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Accept": "application/json, text/plain, */*",
+      "Origin": "https://developv4.kyc34.com",
+      "Referer": "https://developv4.kyc34.com/subscriptionsFollowUp",
+      "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)",
+      "Cookie": `_ugeuid=SOMETHING_SOMETHING; accessToken=${process.env.SOURCE_API_TOKEN?.replace("Bearer ", "")}`,
+    },
+    body: JSON.stringify({
+      status: [],
+      personTypes: ["INDIVIDUAL"],
+      internal: false,
+      timeZone: "Europe/Paris",
+      partIds: [], // tu peux mettre quelques UUID si nécessaires
+    }),
   }
-  return h;
-}
+);
 
-export async function GET(req: NextRequest) {
-  const parse = QuerySchema.safeParse(Object.fromEntries(req.nextUrl.searchParams));
-  if (!parse.success)
-    return NextResponse.json({ error: parse.error.flatten() }, { status: 400 });
-  const q = parse.data;
 
-  // URL source (pas de query, car POST)
-  const listUrl = process.env.SOURCE_API_URL!;
-  
-  // corps de la requête (vide ou minimal)
-  const body = {
-    page: Math.floor(q.offset / q.limit),
-    size: q.limit,
-    sort: `${q.sort},${q.order}`,
-    // tu peux ajouter ici d’autres filtres si ton API en prend (ex: status)
-  };
+  console.log("TOKEN USED:", process.env.SOURCE_API_TOKEN?.slice(0, 50) + "...");
 
-  const r = await fetch(listUrl, {
-    method: 'POST',
-    headers: authHeaders(),
-    body: JSON.stringify(body),
-    cache: 'no-store',
-  });
 
-  if (!r.ok)
-    return NextResponse.json({ error: `Source API error ${r.status}` }, { status: 502 });
-
-  const upstream = await r.json();
-  const srcItems: any[] = upstream.items ?? upstream.data ?? [];
-
-  const ids = srcItems.map(x => x.id).filter(Boolean);
-  let extras = new Map<string, ExtraRow>();
-  if (ids.length) {
-    const rows = await sql`
-      SELECT subscription_id, closing_id, closing_name, retro_percent, retro_amount, comment
-      FROM subscription_extra
-      WHERE subscription_id = ANY(${ids})
-    `;
-    extras = new Map<string, ExtraRow>(
-      (rows as any[]).map((r: any) => [r.subscription_id as string, r as ExtraRow])
-    );
+  if (!res.ok) {
+    const text = await res.text();
+    return NextResponse.json({ error: `Source API error ${res.status}`, details: text }, { status: res.status });
   }
 
-  let items = srcItems.map(src => flattenItem(src, extras.get(src.id)));
-  if (q.q) {
-    const needle = q.q.toLowerCase();
-    items = items.filter(it => searchable(it).includes(needle));
-  }
-
-  return NextResponse.json({
-    items,
-    total: q.q ? items.length : (upstream.total ?? items.length),
-    limit: q.limit,
-    offset: q.offset,
-  });
+  const data = await res.json();
+  return NextResponse.json(data);
 }
