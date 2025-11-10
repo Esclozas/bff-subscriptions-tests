@@ -16,11 +16,13 @@ export async function PUT(req: NextRequest, context: Ctx) {
   const { id } = await context.params;
   const body = await req.json().catch(() => ({}));
   const parse = ExtraSchema.safeParse(body);
-  if (!parse.success) return NextResponse.json({ error: parse.error.flatten() }, { status: 400 });
+  if (!parse.success) {
+    return NextResponse.json({ error: parse.error.flatten() }, { status: 400 });
+  }
 
   const { closingId, closingName, retroPercent, retroAmount, comment } = parse.data;
 
-  const rows = await sql<{ subscription_id: string }[]>`
+  const rows = await sql`
     INSERT INTO subscription_extra (subscription_id, closing_id, closing_name, retro_percent, retro_amount, comment)
     VALUES (${id}, ${closingId}, ${closingName}, ${retroPercent ?? null}, ${retroAmount ?? null}, ${comment ?? null})
     ON CONFLICT (subscription_id) DO UPDATE SET
@@ -32,7 +34,9 @@ export async function PUT(req: NextRequest, context: Ctx) {
       updated_at = now()
     RETURNING subscription_id
   `;
-  return NextResponse.json({ subscriptionId: rows[0].subscription_id });
+
+  const subscriptionId = (rows as any)[0]?.subscription_id as string;
+  return NextResponse.json({ subscriptionId });
 }
 
 export async function DELETE(_: NextRequest, context: Ctx) {
