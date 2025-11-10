@@ -1,6 +1,13 @@
 import { neon } from '@neondatabase/serverless';
 
-export const sql = neon(process.env.NEON_DATABASE_URL!);
+let _sql: ReturnType<typeof neon> | null = null;
+function getSql() {
+  if (_sql) return _sql;
+  const url = process.env.NEON_DATABASE_URL;
+  if (!url) throw new Error('NEON_DATABASE_URL is not set');
+  _sql = neon(url);
+  return _sql;
+}
 
 export type Extra = {
   closingId: string | null;
@@ -10,27 +17,29 @@ export type Extra = {
   comment: string | null;
 };
 
-// Helpers
+const TABLE = 'subscription_extra'; // 👈 singulier (conforme à Neon)
+
 export async function selectExtras(ids: string[]) {
+  const sql = getSql();
   if (!ids.length) return new Map<string, Extra>();
 
   type ExtraRow = {
     subscription_id: string;
     closing_id: string | null;
     closing_name: string | null;
-    retro_percent: number | null;   // peut arriver en string selon le client -> on Number(...) plus bas
-    retro_amount: number | null;    // idem
+    retro_percent: number | null;
+    retro_amount: number | null;
     comment: string | null;
   };
 
   const rows = await sql`
     SELECT subscription_id, closing_id, closing_name, retro_percent, retro_amount, comment
-    FROM subscription_extras
+    FROM ${sql.unsafe(TABLE)}
     WHERE subscription_id = ANY(${ids}::uuid[])
   ` as unknown as ExtraRow[];
 
   const map = new Map<string, Extra>();
-  rows.forEach((r) =>
+  rows.forEach(r =>
     map.set(r.subscription_id, {
       closingId: r.closing_id,
       closingName: r.closing_name,
@@ -52,6 +61,8 @@ export async function upsertExtra(
     comment?: string | null;
   }
 ) {
+  const sql = getSql();
+
   type UpsertRow = {
     closing_id: string | null;
     closing_name: string | null;
@@ -61,7 +72,7 @@ export async function upsertExtra(
   };
 
   const row = await sql`
-    INSERT INTO subscription_extras (subscription_id, closing_id, closing_name, retro_percent, retro_amount, comment)
+    INSERT INTO ${sql.unsafe(TABLE)} (subscription_id, closing_id, closing_name, retro_percent, retro_amount, comment)
     VALUES (${id}::uuid, ${body.closingId ?? null}::uuid, ${body.closingName ?? null},
             ${body.retroPercent ?? null}, ${body.retroAmount ?? null}, ${body.comment ?? null})
     ON CONFLICT (subscription_id) DO UPDATE SET
@@ -86,5 +97,6 @@ export async function upsertExtra(
 }
 
 export async function deleteExtra(id: string) {
-  await sql`DELETE FROM subscription_extras WHERE subscription_id = ${id}::uuid`;
+  const sql = getSql();
+  await sql`DELETE FROM ${sql.unsafe(TABLE)} WHERE subscription_id = ${id}::uuid`;
 }
