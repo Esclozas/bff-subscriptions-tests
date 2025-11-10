@@ -1,6 +1,6 @@
 export const runtime = 'nodejs';
 
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { upsertExtra, deleteExtra } from '@/lib/db';
 
@@ -12,20 +12,19 @@ const BodySchema = z.object({
   comment: z.string().nullable().optional()
 });
 
-type Params = { params: { id: string } };
-
-export async function PUT(req: Request, { params }: Params) {
-  const id = params.id;
+export async function PUT(req: NextRequest, context: { params: Promise<{ id: string }> }) {
+  const { id } = await context.params; // 👈
   const body = await req.json().catch(() => ({}));
   const parsed = BodySchema.safeParse(body);
   if (!parsed.success) {
     return NextResponse.json({ message: 'Bad Request', issues: parsed.error.issues }, { status: 400 });
-  }
+    }
   const saved = await upsertExtra(id, parsed.data);
   return NextResponse.json(saved ?? {});
 }
 
-export async function DELETE(_req: Request, { params }: Params) {
-  await deleteExtra(params.id);
+export async function DELETE(_req: NextRequest, context: { params: Promise<{ id: string }> }) {
+  const { id } = await context.params; // 👈
+  await deleteExtra(id);
   return new NextResponse(null, { status: 204 });
 }
