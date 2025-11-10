@@ -5,52 +5,53 @@ import { upstream } from '@/lib/http';
 import { selectExtras } from '@/lib/db';
 import { flatten } from '@/lib/flatten';
 
-function parseBool(s: string|undefined) {
-  if (s === undefined) return undefined;
-  return ['1','true','yes','on'].includes(s.toLowerCase());
-}
-
 export async function GET(req: NextRequest) {
   const url = new URL(req.url);
-  const q = url.searchParams.get('q') ?? undefined;
-  const status = url.searchParams.get('status') ?? undefined;
-  const teamId = url.searchParams.get('teamId') ?? undefined;
-  const ownerId = url.searchParams.get('ownerId') ?? undefined;
-  const productId = url.searchParams.get('productId') ?? undefined;
-  const from = url.searchParams.get('from') ?? undefined;
-  const to = url.searchParams.get('to') ?? undefined;
-  const sort = url.searchParams.get('sort') ?? undefined;
+  const q = url.searchParams.get('q') ?? '';
+  const status = url.searchParams.get('status') ?? '';
+  const teamId = url.searchParams.get('teamId') ?? '';
+  const ownerId = url.searchParams.get('ownerId') ?? '';
+  const productId = url.searchParams.get('productId') ?? '';
+  const from = url.searchParams.get('from') ?? '';
+  const to = url.searchParams.get('to') ?? '';
+  const sort = url.searchParams.get('sort') ?? '';
   const order = (url.searchParams.get('order') ?? 'desc').toLowerCase() === 'asc' ? 'asc' : 'desc';
   const limit = Math.min(Number(url.searchParams.get('limit') ?? '20'), 100);
   const offset = Math.max(Number(url.searchParams.get('offset') ?? '0'), 0);
 
-  // Appelle l’API source — adapte le chemin/params selon ta vraie API.
-  const source = await upstream(`/subscriptions?` + new URLSearchParams({
-    q: q ?? '',
-    status: status ?? '',
-    teamId: teamId ?? '',
-    ownerId: ownerId ?? '',
-    productId: productId ?? '',
-    from: from ?? '',
-    to: to ?? '',
-    sort: sort ?? '',
-    order,
-    limit: String(limit),
-    offset: String(offset)
-  }).toString());
+  // construit l’URL d’upstream que l’on va appeler (utile pour le debug)
+  const qs = new URLSearchParams({
+    q, status, teamId, ownerId, productId, from, to, sort, order,
+    limit: String(limit), offset: String(offset)
+  }).toString();
 
-  // On attend un shape { content: [...], total: number } côté source (adapte si différent)
-  const items: any[] = source.content ?? source.items ?? [];
-  const ids = items.map(i => i.id).filter(Boolean);
-  const extraMap = await selectExtras(ids);
+  try {
+    const source = await upstream(`/subscriptions?${qs}`);
 
-  const flattened = items.map(it => flatten(it, extraMap.get(it.id)));
-  const total = Number(source.total ?? source.count ?? flattened.length);
+    const items: any[] = source.content ?? source.items ?? [];
+    const ids = items.map(i => i?.id).filter(Boolean);
+    const extraMap = await selectExtras(ids);
+    const flattened = items.map(it => flatten(it, extraMap.get(it.id)));
+    const total = Number(source.total ?? source.count ?? flattened.length);
 
-  return NextResponse.json({
-    items: flattened,
-    total,
-    limit,
-    offset
-  });
+    return NextResponse.json({ items: flattened, total, limit, offset });
+  } catch (err: any) {
+    // log serveur (visible dans Vercel → Deployments → Logs)
+    console.error('BFF /api/subscriptions failed', {
+      reason: String(err?.message ?? err),
+      upstreamBase: process.env.UPSTREAM_API_BASE_URL,
+      path: `/subscriptions?${qs}`,
+      detail: err?.body ?? null,
+      status: err?.status ?? null,
+    });
+
+    // réponse lisible côté client
+    const status = err?.status ? 502 : 500; // 502 = upstream KO
+    return NextResponse.json({
+      message: 'Upstream failure on /api/subscriptions',
+      upstreamBase: process.env.UPSTREAM_API_BASE_URL ?? 'MISSING',
+      path: `/subscriptions?${qs}`,
+      detail: err?.body ?? String(err),
+    }, { status });
+  }
 }
