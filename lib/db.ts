@@ -1,8 +1,6 @@
-// lib/db.ts
 import { neon } from '@neondatabase/serverless';
 
-if (!process.env.DATABASE_URL) {
-  throw new Error('Missing env DATABASE_URL');
-}
+const DB_URL = process.env.DATABASE_URL ?? process.env.NEON_UI_tests;
+if (!DB_URL) throw new Error('Missing env DATABASE_URL (or NEON_UI_tests)');
 
-export const sql = neon(process.env.DATABASE_URL);
+export const sql = neon(DB_URL);
