@@ -19,14 +19,14 @@ export async function GET(req: NextRequest) {
   const limit = Math.min(Number(url.searchParams.get('limit') ?? '20'), 100);
   const offset = Math.max(Number(url.searchParams.get('offset') ?? '0'), 0);
 
-  // construit l’URL d’upstream que l’on va appeler (utile pour le debug)
   const qs = new URLSearchParams({
     q, status, teamId, ownerId, productId, from, to, sort, order,
     limit: String(limit), offset: String(offset)
   }).toString();
 
   try {
-    const source = await upstream(`/subscriptions?${qs}`);
+    // ⚠️ Ici on N'AJOUTE PLUS de chemin : l'ENV pointe déjà sur /overview
+    const source = await upstream(`?${qs}`);
 
     const items: any[] = source.content ?? source.items ?? [];
     const ids = items.map(i => i?.id).filter(Boolean);
@@ -36,21 +36,18 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json({ items: flattened, total, limit, offset });
   } catch (err: any) {
-    // log serveur (visible dans Vercel → Deployments → Logs)
     console.error('BFF /api/subscriptions failed', {
       reason: String(err?.message ?? err),
       upstreamBase: process.env.UPSTREAM_API_BASE_URL,
-      path: `/subscriptions?${qs}`,
+      path: `?${qs}`,
       detail: err?.body ?? null,
       status: err?.status ?? null,
     });
-
-    // réponse lisible côté client
-    const status = err?.status ? 502 : 500; // 502 = upstream KO
+    const status = err?.status ? 502 : 500;
     return NextResponse.json({
       message: 'Upstream failure on /api/subscriptions',
       upstreamBase: process.env.UPSTREAM_API_BASE_URL ?? 'MISSING',
-      path: `/subscriptions?${qs}`,
+      path: `?${qs}`,
       detail: err?.body ?? String(err),
     }, { status });
   }
