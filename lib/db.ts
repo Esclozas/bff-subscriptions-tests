@@ -1,3 +1,11 @@
+// lib/db.ts
+// Fonctions d'accès à Neon (PostgreSQL).
+// - selectExtrasByOperationId(): récupère les lignes de la table subscription_extra
+//   indexées par operation_id (clé TEXT).
+// - upsertExtraByOperationId(): crée ou met à jour les extras pour 1 subscription.
+// - deleteExtraByOperationId(): supprime les extras d’une subscription.
+// Aucune logique métier ici : uniquement SQL + mapping brut des colonnes Neon.
+
 import { neon } from '@neondatabase/serverless';
 
 let _sql: ReturnType<typeof neon> | null = null;
@@ -12,52 +20,85 @@ function getSql() {
 export type Extra = {
   closingId: string | null;
   closingName: string | null;
-  retroPercent: number | null;
-  retroAmount: number | null;
-  comment: string | null;
+
+  entryFeesPercent: number | null;             // entry_fees_percent
+  entryFeesAmount: number | null;              // entry_fees_amount
+  entryFeesAmountTotal: number | null;         // entry_fees_amount_total
+  entryFeesAssignedAmountTotal: number | null; // entry_fees_assigned_amount_total
+  entryFeesAssignedOverridden: boolean | null; // entry_fees_assigned_overridden
+
+  entryFeesAssignedComment: string | null;     // entry_fees_assigned_comment
+  updatedBy: string | null;                    // updated_by
 };
 
-const TABLE = 'subscription_extra'; // 👈 singulier (conforme à Neon)
+const TABLE = 'subscription_extra';
 
-export async function selectExtras(ids: string[]) {
+/** Jointure par operation_id (TEXT) */
+export async function selectExtrasByOperationId(operationIds: string[]) {
   const sql = getSql();
+  if (!operationIds.length) return new Map<string, Extra>();
+
+  const ids = operationIds.map((s) => String(s ?? '').trim()).filter(Boolean);
   if (!ids.length) return new Map<string, Extra>();
 
-  type ExtraRow = {
-    subscription_id: string;
+  type Row = {
+    operation_id: string;
     closing_id: string | null;
     closing_name: string | null;
-    retro_percent: number | null;
-    retro_amount: number | null;
-    comment: string | null;
+    entry_fees_percent: string | number | null;
+    entry_fees_amount: string | number | null;
+    entry_fees_amount_total: string | number | null;
+    entry_fees_assigned_amount_total: string | number | null;
+    entry_fees_assigned_overridden: boolean | null;
+    entry_fees_assigned_comment: string | null;
+    updated_by: string | null;
   };
 
-  const rows = await sql`
-    SELECT subscription_id, closing_id, closing_name, retro_percent, retro_amount, comment
+  const rows = (await sql`
+    SELECT
+      operation_id,
+      closing_id,
+      closing_name,
+      entry_fees_percent,
+      entry_fees_amount,
+      entry_fees_amount_total,
+      entry_fees_assigned_amount_total,
+      entry_fees_assigned_overridden,
+      entry_fees_assigned_comment,
+      updated_by
     FROM ${sql.unsafe(TABLE)}
-    WHERE subscription_id = ANY(${ids}::uuid[])
-  ` as unknown as ExtraRow[];
+    WHERE operation_id = ANY(${ids}::text[])
+  `) as unknown as Row[];
 
   const map = new Map<string, Extra>();
-  rows.forEach(r =>
-    map.set(r.subscription_id, {
+  for (const r of rows) {
+    map.set(r.operation_id, {
       closingId: r.closing_id,
       closingName: r.closing_name,
-      retroPercent: r.retro_percent === null ? null : Number(r.retro_percent),
-      retroAmount: r.retro_amount === null ? null : Number(r.retro_amount),
-      comment: r.comment ?? null,
-    })
-  );
+      entryFeesPercent: r.entry_fees_percent == null ? null : Number(r.entry_fees_percent),
+      entryFeesAmount: r.entry_fees_amount == null ? null : Number(r.entry_fees_amount),
+      entryFeesAmountTotal:
+        r.entry_fees_amount_total == null ? null : Number(r.entry_fees_amount_total),
+      entryFeesAssignedAmountTotal:
+        r.entry_fees_assigned_amount_total == null
+          ? null
+          : Number(r.entry_fees_assigned_amount_total),
+      entryFeesAssignedOverridden: r.entry_fees_assigned_overridden,
+      entryFeesAssignedComment: r.entry_fees_assigned_comment ?? null,
+      updatedBy: r.updated_by ?? null,
+    });
+  }
   return map;
 }
 
-export async function upsertExtra(
-  id: string,
+/** Upsert par operation_id (TEXT) */
+export async function upsertExtraByOperationId(
+  operationId: string,
   body: {
     closingId?: string | null;
     closingName?: string | null;
-    retroPercent?: number | null;
-    retroAmount?: number | null;
+    entryFeesPercent?: number | null;
+    entryFeesAmount?: number | null;
     comment?: string | null;
   }
 ) {
@@ -66,37 +107,57 @@ export async function upsertExtra(
   type UpsertRow = {
     closing_id: string | null;
     closing_name: string | null;
-    retro_percent: number | null;
-    retro_amount: number | null;
-    comment: string | null;
+    entry_fees_percent: number | null;
+    entry_fees_amount: number | null;
+    entry_fees_assigned_comment: string | null;
   };
 
-  const row = await sql`
-    INSERT INTO ${sql.unsafe(TABLE)} (subscription_id, closing_id, closing_name, retro_percent, retro_amount, comment)
-    VALUES (${id}::uuid, ${body.closingId ?? null}::uuid, ${body.closingName ?? null},
-            ${body.retroPercent ?? null}, ${body.retroAmount ?? null}, ${body.comment ?? null})
-    ON CONFLICT (subscription_id) DO UPDATE SET
+  const row = (await sql`
+    INSERT INTO ${sql.unsafe(TABLE)} (
+      operation_id,
+      closing_id,
+      closing_name,
+      entry_fees_percent,
+      entry_fees_amount,
+      entry_fees_assigned_comment
+    )
+    VALUES (
+      ${operationId},
+      ${body.closingId ?? null}::uuid,
+      ${body.closingName ?? null},
+      ${body.entryFeesPercent ?? null},
+      ${body.entryFeesAmount ?? null},
+      ${body.comment ?? null}
+    )
+    ON CONFLICT (operation_id) DO UPDATE SET
       closing_id = EXCLUDED.closing_id,
       closing_name = EXCLUDED.closing_name,
-      retro_percent = EXCLUDED.retro_percent,
-      retro_amount = EXCLUDED.retro_amount,
-      comment = EXCLUDED.comment,
+      entry_fees_percent = EXCLUDED.entry_fees_percent,
+      entry_fees_amount = EXCLUDED.entry_fees_amount,
+      entry_fees_assigned_comment = EXCLUDED.entry_fees_assigned_comment,
       updated_at = NOW()
-    RETURNING closing_id, closing_name, retro_percent, retro_amount, comment
-  ` as unknown as UpsertRow[];
+    RETURNING
+      closing_id,
+      closing_name,
+      entry_fees_percent,
+      entry_fees_amount,
+      entry_fees_assigned_comment
+  `) as unknown as UpsertRow[];
 
   return row[0]
     ? {
         closingId: row[0].closing_id,
         closingName: row[0].closing_name,
-        retroPercent: row[0].retro_percent === null ? null : Number(row[0].retro_percent),
-        retroAmount: row[0].retro_amount === null ? null : Number(row[0].retro_amount),
-        comment: row[0].comment ?? null,
+        entryFeesPercent:
+          row[0].entry_fees_percent === null ? null : Number(row[0].entry_fees_percent),
+        entryFeesAmount:
+          row[0].entry_fees_amount === null ? null : Number(row[0].entry_fees_amount),
+        entryFeesAssignedComment: row[0].entry_fees_assigned_comment ?? null,
       }
     : null;
 }
 
-export async function deleteExtra(id: string) {
+export async function deleteExtraByOperationId(operationId: string) {
   const sql = getSql();
-  await sql`DELETE FROM ${sql.unsafe(TABLE)} WHERE subscription_id = ${id}::uuid`;
+  await sql`DELETE FROM ${sql.unsafe(TABLE)} WHERE operation_id = ${operationId}`;
 }

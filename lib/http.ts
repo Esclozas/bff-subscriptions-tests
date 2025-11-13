@@ -1,4 +1,9 @@
 // lib/http.ts
+// Client HTTP minimal pour appeler developv4.
+// - upstream(path, options): fait un fetch() avec gestion automatique du token
+//   et erreurs JSON propres.
+// Aucune logique métier ici : seulement un proxy fiable vers l’API developv4.
+
 export class HttpError extends Error {
   status: number;
   body: unknown;
@@ -46,7 +51,10 @@ export async function upstream(path: string, init?: RequestInit) {
 
   if (!res.ok) {
     const body = (data !== undefined && data !== null && data !== '') ? data : (text || res.statusText);
-    throw new HttpError(res.status, body);
+    const err = new HttpError(res.status, body);
+    // Optionnel : attacher l’URL pour le debug
+    (err as any).url = url;
+    throw err;
   }
 
   return (data ?? {}) as any;
