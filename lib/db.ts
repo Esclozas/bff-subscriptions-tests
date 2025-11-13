@@ -1,9 +1,9 @@
 // lib/db.ts
-// Fonctions d'accès à Neon (PostgreSQL).
-// - selectExtrasByOperationId(): récupère les lignes de la table subscription_extra
-//   indexées par operation_id (clé TEXT).
-// - upsertExtraByOperationId(): crée ou met à jour les extras pour 1 subscription.
-// - deleteExtraByOperationId(): supprime les extras d’une subscription.
+// Fonctions d'accès à Neon (PostgreSQL) pour la table subscription_extra.
+// - selectExtrasByOperationId(): récupère les lignes indexées par operation_id (clé TEXT)
+//   et les mappe vers un type Extra (camelCase).
+// - upsertExtraByOperationId(): crée ou met à jour les extras d’une souscription (closing*, entry_fees_*).
+// - deleteExtraByOperationId(): supprime les extras d’une souscription par operation_id.
 // Aucune logique métier ici : uniquement SQL + mapping brut des colonnes Neon.
 
 import { neon } from '@neondatabase/serverless';
@@ -21,25 +21,27 @@ export type Extra = {
   closingId: string | null;
   closingName: string | null;
 
-  entryFeesPercent: number | null;             // entry_fees_percent
-  entryFeesAmount: number | null;              // entry_fees_amount
-  entryFeesAmountTotal: number | null;         // entry_fees_amount_total
-  entryFeesAssignedAmountTotal: number | null; // entry_fees_assigned_amount_total
-  entryFeesAssignedOverridden: boolean | null; // entry_fees_assigned_overridden
+  entryFeesPercent: number | null;
+  entryFeesAmount: number | null;
+  entryFeesAmountTotal: number | null;
+  entryFeesAssignedAmountTotal: number | null;
+  entryFeesAssignedOverridden: boolean | null;
 
-  entryFeesAssignedComment: string | null;     // entry_fees_assigned_comment
-  updatedBy: string | null;                    // updated_by
+  entryFeesAssignedComment: string | null;
+  updatedBy: string | null;
 };
 
 const TABLE = 'subscription_extra';
 
-/** Jointure par operation_id (TEXT) */
+/** Lecture en masse des extras par operation_id (TEXT) */
 export async function selectExtrasByOperationId(operationIds: string[]) {
   const sql = getSql();
   if (!operationIds.length) return new Map<string, Extra>();
 
   const ids = operationIds.map((s) => String(s ?? '').trim()).filter(Boolean);
   if (!ids.length) return new Map<string, Extra>();
+
+  const arrayLiteral = `{${ids.join(',')}}`;
 
   type Row = {
     operation_id: string;
@@ -67,7 +69,7 @@ export async function selectExtrasByOperationId(operationIds: string[]) {
       entry_fees_assigned_comment,
       updated_by
     FROM ${sql.unsafe(TABLE)}
-    WHERE operation_id = ANY(${ids}::text[])
+    WHERE operation_id = ANY(${arrayLiteral}::text[])
   `) as unknown as Row[];
 
   const map = new Map<string, Extra>();
@@ -91,15 +93,21 @@ export async function selectExtrasByOperationId(operationIds: string[]) {
   return map;
 }
 
-/** Upsert par operation_id (TEXT) */
+/** Upsert par operation_id (TEXT) avec COALESCE pour ne pas écraser les champs non envoyés */
 export async function upsertExtraByOperationId(
   operationId: string,
   body: {
     closingId?: string | null;
     closingName?: string | null;
+
     entryFeesPercent?: number | null;
     entryFeesAmount?: number | null;
-    comment?: string | null;
+    entryFeesAmountTotal?: number | null;
+    entryFeesAssignedAmountTotal?: number | null;
+    entryFeesAssignedOverridden?: boolean | null;
+
+    entryFeesAssignedManualBy?: string | null;   // → updated_by
+    entryFeesAssignedComment?: string | null;    // → entry_fees_assigned_comment
   }
 ) {
   const sql = getSql();
@@ -107,19 +115,27 @@ export async function upsertExtraByOperationId(
   type UpsertRow = {
     closing_id: string | null;
     closing_name: string | null;
-    entry_fees_percent: number | null;
-    entry_fees_amount: number | null;
+    entry_fees_percent: string | number | null;
+    entry_fees_amount: string | number | null;
+    entry_fees_amount_total: string | number | null;
+    entry_fees_assigned_amount_total: string | number | null;
+    entry_fees_assigned_overridden: boolean | null;
     entry_fees_assigned_comment: string | null;
+    updated_by: string | null;
   };
 
-  const row = (await sql`
+  const rows = (await sql`
     INSERT INTO ${sql.unsafe(TABLE)} (
       operation_id,
       closing_id,
       closing_name,
       entry_fees_percent,
       entry_fees_amount,
-      entry_fees_assigned_comment
+      entry_fees_amount_total,
+      entry_fees_assigned_amount_total,
+      entry_fees_assigned_overridden,
+      entry_fees_assigned_comment,
+      updated_by
     )
     VALUES (
       ${operationId},
@@ -127,37 +143,60 @@ export async function upsertExtraByOperationId(
       ${body.closingName ?? null},
       ${body.entryFeesPercent ?? null},
       ${body.entryFeesAmount ?? null},
-      ${body.comment ?? null}
+      ${body.entryFeesAmountTotal ?? null},
+      ${body.entryFeesAssignedAmountTotal ?? null},
+      ${body.entryFeesAssignedOverridden ?? null},
+      ${body.entryFeesAssignedComment ?? null},
+      ${body.entryFeesAssignedManualBy ?? null}
     )
     ON CONFLICT (operation_id) DO UPDATE SET
-      closing_id = EXCLUDED.closing_id,
-      closing_name = EXCLUDED.closing_name,
-      entry_fees_percent = EXCLUDED.entry_fees_percent,
-      entry_fees_amount = EXCLUDED.entry_fees_amount,
-      entry_fees_assigned_comment = EXCLUDED.entry_fees_assigned_comment,
+      closing_id = COALESCE(EXCLUDED.closing_id, ${sql.unsafe(TABLE)}.closing_id),
+      closing_name = COALESCE(EXCLUDED.closing_name, ${sql.unsafe(TABLE)}.closing_name),
+      entry_fees_percent = COALESCE(EXCLUDED.entry_fees_percent, ${sql.unsafe(TABLE)}.entry_fees_percent),
+      entry_fees_amount = COALESCE(EXCLUDED.entry_fees_amount, ${sql.unsafe(TABLE)}.entry_fees_amount),
+      entry_fees_amount_total = COALESCE(EXCLUDED.entry_fees_amount_total, ${sql.unsafe(TABLE)}.entry_fees_amount_total),
+      entry_fees_assigned_amount_total = COALESCE(EXCLUDED.entry_fees_assigned_amount_total, ${sql.unsafe(TABLE)}.entry_fees_assigned_amount_total),
+      entry_fees_assigned_overridden = COALESCE(EXCLUDED.entry_fees_assigned_overridden, ${sql.unsafe(TABLE)}.entry_fees_assigned_overridden),
+      entry_fees_assigned_comment = COALESCE(EXCLUDED.entry_fees_assigned_comment, ${sql.unsafe(TABLE)}.entry_fees_assigned_comment),
+      updated_by = COALESCE(EXCLUDED.updated_by, ${sql.unsafe(TABLE)}.updated_by),
       updated_at = NOW()
     RETURNING
       closing_id,
       closing_name,
       entry_fees_percent,
       entry_fees_amount,
-      entry_fees_assigned_comment
+      entry_fees_amount_total,
+      entry_fees_assigned_amount_total,
+      entry_fees_assigned_overridden,
+      entry_fees_assigned_comment,
+      updated_by
   `) as unknown as UpsertRow[];
 
-  return row[0]
+  const r = rows[0];
+  return r
     ? {
-        closingId: row[0].closing_id,
-        closingName: row[0].closing_name,
-        entryFeesPercent:
-          row[0].entry_fees_percent === null ? null : Number(row[0].entry_fees_percent),
-        entryFeesAmount:
-          row[0].entry_fees_amount === null ? null : Number(row[0].entry_fees_amount),
-        entryFeesAssignedComment: row[0].entry_fees_assigned_comment ?? null,
+        closingId: r.closing_id,
+        closingName: r.closing_name,
+        entryFeesPercent: r.entry_fees_percent == null ? null : Number(r.entry_fees_percent),
+        entryFeesAmount: r.entry_fees_amount == null ? null : Number(r.entry_fees_amount),
+        entryFeesAmountTotal:
+          r.entry_fees_amount_total == null ? null : Number(r.entry_fees_amount_total),
+        entryFeesAssignedAmountTotal:
+          r.entry_fees_assigned_amount_total == null
+            ? null
+            : Number(r.entry_fees_assigned_amount_total),
+        entryFeesAssignedOverridden: r.entry_fees_assigned_overridden,
+        entryFeesAssignedComment: r.entry_fees_assigned_comment ?? null,
+        updatedBy: r.updated_by ?? null,
       }
     : null;
 }
 
+/** Suppression simple par operation_id */
 export async function deleteExtraByOperationId(operationId: string) {
   const sql = getSql();
-  await sql`DELETE FROM ${sql.unsafe(TABLE)} WHERE operation_id = ${operationId}`;
+  await sql`
+    DELETE FROM ${sql.unsafe(TABLE)}
+    WHERE operation_id = ${operationId}
+  `;
 }

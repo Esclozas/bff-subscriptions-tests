@@ -1,13 +1,14 @@
+// app/api/subscriptions/[id]/extra/route.ts
 /**
  * Routes: 
  *   PUT    /api/subscriptions/:id/extra
  *   DELETE /api/subscriptions/:id/extra
  *
  * PUT:
- *   - Trouve operationId correspondant à la subscription (via overview).
- *   - Upsert dans Neon: closingName, entry_fees_percent, entry_fees_amount, comment, etc.
- *   - Accepte ancien nommage (retroPercent/retroAmount) et nouveau entry_fees_*.
- *   - Renvoie les valeurs enregistrées.
+ *   - Récupère operationId via le détail BFF /api/subscriptions/:id (qui utilise déjà developv4).
+ *   - Upsert dans Neon: closingName, entry_fees_percent, entry_fees_amount, totals, overridden, comment, etc.
+ *   - Accepte l’ancien nommage (retroPercent/retroAmount/comment) et le nouveau entry_fees_*.
+ *   - Renvoie les valeurs enregistrées (format camelCase pour l’UI).
  *
  * DELETE:
  *   - Supprime les extras Neon pour cette subscription (clé operationId).
@@ -16,7 +17,7 @@
  *   PUT    → modifier les données personnalisées Neon pour une subscription
  *   DELETE → les retirer complètement
  *
- * Rien n’est modifié chez developv4 : uniquement la table Neon.
+ * Rien n’est modifié chez developv4 : uniquement la table Neon (subscription_extra).
  */
 
 export const runtime = 'nodejs';
@@ -25,95 +26,81 @@ import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { upsertExtraByOperationId, deleteExtraByOperationId } from '@/lib/db';
 
-type Ctx = { params: Promise<{ id: string }> };
-
-function cookieHeaderFrom(req: NextRequest) {
-  const cookie = req.headers.get('cookie') ?? '';
-  if (cookie) return cookie;
-  const token = process.env.UPSTREAM_ACCESS_TOKEN;
-  return token ? `accessToken=${token}` : '';
-}
-
-async function fetchOverviewPage(page: number, size: number, cookie: string) {
-  const base = process.env.UPSTREAM_API_BASE_URL!;
-  const url = `${base}/overview?page=${page}&size=${size}`;
-  const payload = {
-    status: [],
-    partIds: [],
-    personTypes: [],
-    internal: false,
-    timeZone: 'Europe/Paris',
-  };
-  const res = await fetch(url, {
-    method: 'POST',
-    headers: {
-      Accept: 'application/json',
-      'Content-Type': 'application/json',
-      ...(cookie ? { Cookie: cookie } : {}),
-    },
-    body: JSON.stringify(payload),
-    cache: 'no-store',
-  });
-  if (!res.ok) {
-    const text = await res.text();
-    throw new Error(`Upstream ${res.status} @ ${url} :: ${text.slice(0, 200)}`);
-  }
-  return res.json() as Promise<{ content?: any[]; items?: any[] }>;
-}
-
-async function resolveOperationIdBySubscriptionId(req: NextRequest, subscriptionId: string) {
-  const cookie = cookieHeaderFrom(req);
-  const PAGE_SIZE = 100;
-  let page = 0;
-
-  while (page < 10) {
-    const data = await fetchOverviewPage(page, PAGE_SIZE, cookie);
-    const list = (Array.isArray(data.content)
-      ? data.content
-      : Array.isArray(data.items)
-      ? data.items
-      : []) as any[];
-
-    const found = list.find(
-      (it) => (it?.id ?? it?.subscriptionId ?? it?.subscription?.id) === subscriptionId,
-    );
-    if (found) return found?.operationId ?? found?.operation?.id ?? null;
-    if (list.length < PAGE_SIZE) break;
-    page += 1;
-  }
-  return null;
-}
-
-// Body : on accepte à la fois l'ancien nommage retro* ET le nouveau entry_fees_*
+// Contrat d’entrée accepté par le BFF pour le PUT
 const BodySchema = z.object({
+  // Closing
   closingId: z.string().uuid().nullable().optional(),
   closingName: z.string().nullable().optional(),
 
-  // nouveau nommage
-  entry_fees_percent: z.number().min(0).nullable().optional(),
-  entry_fees_amount: z.number().min(0).nullable().optional(),
+  // Nouveau nommage aligné Neon (snake_case)
+  entry_fees_percent: z.number().nullable().optional(),
+  entry_fees_amount: z.number().nullable().optional(),
+  entry_fees_amount_total: z.number().nullable().optional(),
+  entry_fees_assigned_amount_total: z.number().nullable().optional(),
+  entry_fees_assigned_overridden: z.boolean().nullable().optional(),
+  entry_fees_assigned_manual_by: z.string().nullable().optional(),
+  entry_fees_assigned_comment: z.string().nullable().optional(),
 
-  // compat ancien nommage (retro*)
-  retroPercent: z.number().min(0).nullable().optional(),
-  retroAmount: z.number().min(0).nullable().optional(),
-
+  // Ancien nommage (retro*)
+  retroPercent: z.number().nullable().optional(),
+  retroAmount: z.number().nullable().optional(),
   comment: z.string().nullable().optional(),
 });
+
+// En Next 16, params est un Promise
+type Ctx = { params: Promise<{ id: string }> };
+
+/** Récupère operationId en appelant la route BFF détail /api/subscriptions/:id */
+async function resolveOperationIdFromBff(req: NextRequest, subscriptionId: string): Promise<string | null> {
+  try {
+    const origin = req.nextUrl.origin; // ex: http://localhost:3000 ou https://bff-subscriptions-tests.vercel.app
+
+    const res = await fetch(`${origin}/api/subscriptions/${subscriptionId}`, {
+      method: 'GET',
+      headers: {
+        Accept: 'application/json',
+      },
+    });
+
+    if (!res.ok) {
+      throw new Error(`BFF detail returned ${res.status}`);
+    }
+
+    const data = await res.json();
+    const opId = data?.operationId ?? null;
+
+    if (!opId) {
+      console.error('resolveOperationIdFromBff: operationId missing in BFF detail', {
+        subscriptionId,
+      });
+    }
+
+    return opId;
+  } catch (e) {
+    console.error('resolveOperationIdFromBff failed', {
+      subscriptionId,
+      reason: String((e as any)?.message ?? e),
+    });
+    return null;
+  }
+}
 
 export async function PUT(req: NextRequest, context: Ctx) {
   try {
     const { id: subscriptionId } = await context.params;
 
-    const operationId = await resolveOperationIdBySubscriptionId(req, subscriptionId);
+    // 1) Résoudre operationId via le détail BFF
+    const operationId = await resolveOperationIdFromBff(req, subscriptionId);
     if (!operationId) {
       return NextResponse.json(
-        { message: 'operationId not found for this subscription', subscriptionId },
+        { message: 'operationId not found for this subscription' },
         { status: 400 },
       );
     }
 
-    const body = await req.json().catch(() => ({}));
-    const parsed = BodySchema.safeParse(body);
+    // 2) Valider le body
+    const rawBody = await req.json().catch(() => ({}));
+    const parsed = BodySchema.safeParse(rawBody);
     if (!parsed.success) {
       return NextResponse.json(
         { message: 'Bad Request', issues: parsed.error.issues },
@@ -121,22 +108,38 @@ export async function PUT(req: NextRequest, context: Ctx) {
       );
     }
 
-    const data = parsed.data;
-    const entryFeesPercent =
-      data.entry_fees_percent ?? (data.retroPercent != null ? data.retroPercent : null);
-    const entryFeesAmount =
-      data.entry_fees_amount ?? (data.retroAmount != null ? data.retroAmount : null);
+    const body = parsed.data;
 
-    const saved = await upsertExtraByOperationId(operationId, {
-      closingId: data.closingId ?? null,
-      closingName: data.closingName ?? null,
-      entryFeesPercent,
-      entryFeesAmount,
-      comment: data.comment ?? null,
-    });
+    // 3) Normaliser vers le contrat attendu par lib/db.ts (camelCase)
+    const payload = {
+      closingId: body.closingId ?? null,
+      closingName: body.closingName ?? null,
 
+      entryFeesPercent:
+        body.entry_fees_percent ??
+        (body.retroPercent != null ? body.retroPercent : null),
+
+      entryFeesAmount:
+        body.entry_fees_amount ??
+        (body.retroAmount != null ? body.retroAmount : null),
+
+      entryFeesAmountTotal: body.entry_fees_amount_total ?? null,
+      entryFeesAssignedAmountTotal: body.entry_fees_assigned_amount_total ?? null,
+      entryFeesAssignedOverridden: body.entry_fees_assigned_overridden ?? null,
+
+      entryFeesAssignedManualBy: body.entry_fees_assigned_manual_by ?? null,
+      entryFeesAssignedComment:
+        body.entry_fees_assigned_comment ??
+        (body.comment != null ? body.comment : null),
+    };
+
+    // 4) Upsert côté Neon
+    const saved = await upsertExtraByOperationId(operationId, payload);
     return NextResponse.json(saved ?? {});
   } catch (err: any) {
+    console.error('PUT /api/subscriptions/[id]/extra failed', {
+      reason: String(err?.message ?? err),
+    });
     return NextResponse.json(
       { message: 'DB failure on upsert extra', detail: String(err?.message ?? err) },
       { status: 500 },
@@ -148,10 +151,10 @@ export async function DELETE(req: NextRequest, context: Ctx) {
   try {
     const { id: subscriptionId } = await context.params;
 
-    const operationId = await resolveOperationIdBySubscriptionId(req, subscriptionId);
+    const operationId = await resolveOperationIdFromBff(req, subscriptionId);
     if (!operationId) {
       return NextResponse.json(
-        { message: 'operationId not found for this subscription', subscriptionId },
+        { message: 'operationId not found for this subscription' },
         { status: 400 },
       );
     }
@@ -159,6 +162,9 @@ export async function DELETE(req: NextRequest, context: Ctx) {
     await deleteExtraByOperationId(operationId);
     return new NextResponse(null, { status: 204 });
   } catch (err: any) {
+    console.error('DELETE /api/subscriptions/[id]/extra failed', {
+      reason: String(err?.message ?? err),
+    });
     return NextResponse.json(
       { message: 'DB failure on delete extra', detail: String(err?.message ?? err) },
       { status: 500 },
