@@ -18,6 +18,8 @@ export const runtime = 'nodejs';
 import { NextRequest, NextResponse } from 'next/server';
 import { selectExtrasByOperationId } from '@/lib/db';
 import { flattenSubscription } from '@/lib/flatten';
+import { withCors, handleOptions } from '@/lib/cors'; // 👈 import CORS
+
 
 type Ctx = { params: Promise<{ id: string }> };
 
@@ -101,7 +103,9 @@ export async function GET(req: NextRequest, context: Ctx) {
     }
 
     if (!found) {
-      return NextResponse.json({ message: 'Not Found in overview', id }, { status: 404 });
+      return withCors(
+        NextResponse.json({ message: 'Not Found in overview', id }, { status: 404 }),
+      ); // 👈 CORS ici
     }
 
     const opId: string | null = found?.operationId ?? found?.operation?.id ?? null;
@@ -116,11 +120,21 @@ export async function GET(req: NextRequest, context: Ctx) {
     }
 
     const flat = flattenSubscription(found, extra);
-    return NextResponse.json(flat);
+    return withCors(NextResponse.json(flat)); // 👈 succès avec CORS
   } catch (err: any) {
-    return NextResponse.json(
-      { message: 'Detail failure (overview fallback)', detail: String(err?.message ?? err) },
-      { status: 500 },
-    );
+    return withCors(
+      NextResponse.json(
+        {
+          message: 'Detail failure (overview fallback)',
+          detail: String(err?.message ?? err),
+        },
+        { status: 500 },
+      ),
+    ); // 👈 erreur avec CORS
   }
+}
+
+// 👇 Handler OPTIONS pour le préflight CORS
+export function OPTIONS(req: NextRequest) {
+  return handleOptions(req);
 }

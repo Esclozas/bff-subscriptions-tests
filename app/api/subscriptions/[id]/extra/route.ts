@@ -25,6 +25,7 @@ export const runtime = 'nodejs';
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { upsertExtraByOperationId, deleteExtraByOperationId } from '@/lib/db';
+import { withCors, handleOptions } from '@/lib/cors'; // 👈 AJOUT
 
 // Contrat d’entrée accepté par le BFF pour le PUT
 const BodySchema = z.object({
@@ -92,9 +93,11 @@ export async function PUT(req: NextRequest, context: Ctx) {
     // 1) Résoudre operationId via le détail BFF
     const operationId = await resolveOperationIdFromBff(req, subscriptionId);
     if (!operationId) {
-      return NextResponse.json(
-        { message: 'operationId not found for this subscription' },
-        { status: 400 },
+      return withCors(
+        NextResponse.json(
+          { message: 'operationId not found for this subscription' },
+          { status: 400 },
+        ),
       );
     }
 
@@ -102,9 +105,11 @@ export async function PUT(req: NextRequest, context: Ctx) {
     const rawBody = await req.json().catch(() => ({}));
     const parsed = BodySchema.safeParse(rawBody);
     if (!parsed.success) {
-      return NextResponse.json(
-        { message: 'Bad Request', issues: parsed.error.issues },
-        { status: 400 },
+      return withCors(
+        NextResponse.json(
+          { message: 'Bad Request', issues: parsed.error.issues },
+          { status: 400 },
+        ),
       );
     }
 
@@ -135,14 +140,16 @@ export async function PUT(req: NextRequest, context: Ctx) {
 
     // 4) Upsert côté Neon
     const saved = await upsertExtraByOperationId(operationId, payload);
-    return NextResponse.json(saved ?? {});
+    return withCors(NextResponse.json(saved ?? {}));
   } catch (err: any) {
     console.error('PUT /api/subscriptions/[id]/extra failed', {
       reason: String(err?.message ?? err),
     });
-    return NextResponse.json(
-      { message: 'DB failure on upsert extra', detail: String(err?.message ?? err) },
-      { status: 500 },
+    return withCors(
+      NextResponse.json(
+        { message: 'DB failure on upsert extra', detail: String(err?.message ?? err) },
+        { status: 500 },
+      ),
     );
   }
 }
@@ -153,21 +160,30 @@ export async function DELETE(req: NextRequest, context: Ctx) {
 
     const operationId = await resolveOperationIdFromBff(req, subscriptionId);
     if (!operationId) {
-      return NextResponse.json(
-        { message: 'operationId not found for this subscription' },
-        { status: 400 },
+      return withCors(
+        NextResponse.json(
+          { message: 'operationId not found for this subscription' },
+          { status: 400 },
+        ),
       );
     }
 
     await deleteExtraByOperationId(operationId);
-    return new NextResponse(null, { status: 204 });
+    return withCors(new NextResponse(null, { status: 204 }));
   } catch (err: any) {
     console.error('DELETE /api/subscriptions/[id]/extra failed', {
       reason: String(err?.message ?? err),
     });
-    return NextResponse.json(
-      { message: 'DB failure on delete extra', detail: String(err?.message ?? err) },
-      { status: 500 },
+    return withCors(
+      NextResponse.json(
+        { message: 'DB failure on delete extra', detail: String(err?.message ?? err) },
+        { status: 500 },
+      ),
     );
   }
+}
+
+// 👇 Handler OPTIONS pour le préflight CORS
+export function OPTIONS(req: NextRequest) {
+  return handleOptions(req);
 }

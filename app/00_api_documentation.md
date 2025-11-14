@@ -1,5 +1,11 @@
 # API Subscriptions — Résumé ultra-concis
 
+# Local
+BASE="http://localhost:3000"
+
+# Ou Vercel
+BASE="https://bff-subscriptions-tests.vercel.app"
+
 
 # 📌 Routes
 
@@ -111,3 +117,99 @@ PUT (merge Neon) :
 
 DELETE :
     curl -si -X DELETE "$BASE/api/subscriptions/ID/extra"
+
+---
+
+# 📌 JSON aplati final (JSON)
+
+{
+  "subscriptionId": "string",
+  "status": "string",
+  "createdDate": "string",
+  "updatedDate": "string",
+
+  "operationId": "string",
+
+  "amountValue": 0,
+  "amountCurrency": "string",
+
+  "partId": "string",
+  "partName": "string",
+
+  "investorId": "string",
+  "investorType": "string",
+  "investorName": "string",
+  "investorFirstName": "string",
+
+  "productId": "string",
+  "productName": "string",
+
+  "teamId": "string",
+  "teamName": "string",
+  "teamInternal": true,
+
+  "ownerId": "string",
+  "ownerName": "string",
+  "ownerFirstName": "string",
+  "ownerEmail": "string",
+  "ownerInternal": false,
+
+  "closingId": "string",
+  "closingName": "string",
+
+  "entry_fees_percent": 0,
+  "entry_fees_amount": 0,
+  "entry_fees_amount_total": 0,
+  "entry_fees_assigned_amount_total": 0,
+  "entry_fees_assigned_overridden": true,
+  "entry_fees_assigned_manual_by": "string",
+  "entry_fees_assigned_comment": "string"
+}
+
+---
+
+# 📌 JSON aplati final (JSON expliqué)
+
+| Champ                             | Type       | Origine   | Description courte   |
+|----------------------------------|------------|-----------|-----------------------|
+| subscriptionId                   | string     | upstream  | ID de la souscription |
+| status                           | string     | upstream  | Statut (TO_BE_SENT…)  |
+| createdDate                      | string     | upstream  | ISO-8601              |
+| updatedDate                      | string     | upstream  | ISO-8601              |
+
+| operationId                      | string     | upstream  | Clé pour joindre Neon |
+
+| amountValue                      | number     | upstream  | Montant               |
+| amountCurrency                   | string     | upstream  | EUR, USD…             |
+
+| partId                           | string     | upstream  | ID de la part         |
+| partName                         | string     | upstream  | Nom                   |
+
+| investorId                       | string     | upstream  | ID investisseur       |
+| investorType                     | string     | upstream  | PERSON / COMPANY      |
+| investorName                     | string     | upstream  | Nom                   |
+| investorFirstName                | string     | upstream  | Prénom                |
+
+| productId                        | string     | upstream  | ID produit            |
+| productName                      | string     | upstream  | Nom                   |
+
+| teamId                           | string     | upstream  | ID équipe             |
+| teamName                         | string     | upstream  | Nom                   |
+| teamInternal                     | boolean    | upstream  | Interne ?             |
+
+| ownerId                          | string     | upstream  | ID owner              |
+| ownerName                        | string     | upstream  | Nom                   |
+| ownerFirstName                   | string     | upstream  | Prénom                |
+| ownerEmail                       | string     | upstream  | Email                 |
+| ownerInternal                    | boolean    | upstream  | Interne ?             |
+
+| closingId                        | string     | Neon      | ID closing            |
+| closingName                      | string     | Neon      | Nom closing           |
+
+| entry_fees_percent               | number     | Neon      | % frais entrée        |
+| entry_fees_amount                | number     | Neon      | Montant               |
+| entry_fees_amount_total          | number     | Neon      | Montant total         |
+| entry_fees_assigned_amount_total | number     | Neon      | Montant assigné       |
+| entry_fees_assigned_overridden   | boolean    | Neon      | Override ?            |
+| entry_fees_assigned_manual_by    | string     | Neon      | Dernière modif par    |
+| entry_fees_assigned_comment      | string     | Neon      | Commentaire           |

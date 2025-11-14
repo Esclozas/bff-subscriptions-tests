@@ -57,6 +57,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { upstream } from '@/lib/http';
 import { selectExtrasByOperationId } from '@/lib/db';
 import { flattenSubscription } from '@/lib/flatten';
+import { withCors, handleOptions } from '@/lib/cors';
 
 type SourceList = {
   content?: any[];
@@ -217,7 +218,7 @@ export async function GET(req: NextRequest) {
       }),
     });
 
-    return NextResponse.json(data);
+    return withCors(NextResponse.json(data));
   }
 
   const isGlobal = hasGlobalFilters(url);
@@ -277,12 +278,14 @@ export async function GET(req: NextRequest) {
       data.total ?? data.totalElements ?? flattened.length
     );
 
-    return NextResponse.json({
-      items: flattened,
-      total,
-      limit: size,
-      offset: page * size,
-    });
+    return withCors(
+      NextResponse.json({
+        items: flattened,
+        total,
+        limit: size,
+        offset: page * size,
+      }),
+    );
   }
 
   /**
@@ -406,10 +409,16 @@ export async function GET(req: NextRequest) {
   const total = flattened.length;
   const slice = flattened.slice(offset, offset + limit);
 
-  return NextResponse.json({
-    items: slice,
-    total,
-    limit,
-    offset,
-  });
+  return withCors(
+    NextResponse.json({
+      items: slice,
+      total,
+      limit,
+      offset,
+    }),
+  );
+}
+
+export function OPTIONS(req: NextRequest) {
+  return handleOptions(req);
 }
