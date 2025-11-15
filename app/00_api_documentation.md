@@ -1,5 +1,9 @@
 # API Subscriptions — Résumé ultra-concis
 
+# Tester local
+cd bff-subscriptions-tests
+npm run dev
+
 # Local
 BASE="http://localhost:3000"
 
@@ -24,14 +28,14 @@ BASE="https://bff-subscriptions-tests.vercel.app"
 |---------------|--------------------------------------------------|---------------------------------------------|-------------------------------|
 | **limit**     | Nombre d’items renvoyés par l’API (max 250)      | Contrôle la taille d’une page UI            | UI ↔️ BFF                     |
 | **offset**    | Position de départ dans la liste finale          | Permet le scroll infini (page suivante)     | UI ↔️ BFF                     |
-| **PAGE_SIZE** | Taille des pages pour appeler developv4 (1000)   | Charge *toutes* les données sans timeout    | BFF → upstream (interne)      |
+| **PAGE_SIZE** | Taille des pages pour appeler developv4 (5000)   | Charge *toutes* les données sans timeout    | BFF → upstream (interne)      |
 
 
  1) 📄 1º page (par défaut, sans rien) → `limit = 250` par défaut  → `offset = 0` (début de la liste)
- → Exemple : curl -s "$BASE/api/subscriptions" | jq .
+curl -s "$BASE/api/subscriptions" | jq .
 
  2) 📄 1º page (explicitement) → Même résultat mais en le demandant soi-même
- → Exemple : curl -s "$BASE/api/subscriptions?limit=250&offset=0" | jq .
+curl -s "$BASE/api/subscriptions?limit=250&offset=0" | jq .
 
  3) 📄 2º page → On saute les 250 premières lignes  → offset = 250
  → Exemple : curl -s "$BASE/api/subscriptions?limit=250&offset=250" | jq .
@@ -213,3 +217,54 @@ DELETE :
 | entry_fees_assigned_overridden   | boolean    | Neon      | Override ?            |
 | entry_fees_assigned_manual_by    | string     | Neon      | Dernière modif par    |
 | entry_fees_assigned_comment      | string     | Neon      | Commentaire           |
+
+
+# -------------------------------------------------------------------------------------------
+
+
+## 📌 Vue groupée AG Grid — POST /api/subscriptions/grid
+🔌 Body attendu
+{
+  "startRow": 0,
+  "endRow": 100,
+  "rowGroupCols": [
+    { "field": "fundId" },
+    { "field": "partId" },
+    { "field": "closingId" },
+    { "field": "teamId" },
+    { "field": "distributorId" },
+    { "field": "investorId" }
+  ],
+  "groupKeys": [],
+  "sortModel": [
+    { "colId": "createdDate", "sort": "desc" }
+  ],
+  "filterModel": {}
+}
+
+📤 Réponse
+{
+  "rows": [],
+  "lastRow": 1234
+}
+
+📦 Exemples
+1) 📄 Flat mode via /grid
+curl -s -X POST "$BASE/api/subscriptions/grid" \
+  -H "Content-Type: application/json" \
+  -d '{"startRow":0,"endRow":20,"rowGroupCols":[],"groupKeys":[]}' | jq .
+
+2) 📄 Groupement niveau 0 (fonds)
+curl -s -X POST "$BASE/api/subscriptions/grid" \
+  -H "Content-Type: application/json" \
+  -d '{"startRow":0,"endRow":20,"rowGroupCols":[{"field":"fundId"}],"groupKeys":[]}' | jq .
+
+3) 📄 Groupe niveau 1 (parts d’un fonds)
+curl -s -X POST "$BASE/api/subscriptions/grid" \
+  -H "Content-Type: application/json" \
+  -d '{"startRow":0,"endRow":20,"rowGroupCols":[{"field":"fundId"},{"field":"partId"}],"groupKeys":["FUND-ID"]}' | jq .
+
+4) 📄 Mode B : équipe → distributeur → fonds → …
+curl -s -X POST "$BASE/api/subscriptions/grid" \
+  -H "Content-Type: application/json" \
+  -d '{"rowGroupCols":[{"field":"teamId"},{"field":"distributorId"},{"field":"fundId"}],"groupKeys":[]}' | jq .

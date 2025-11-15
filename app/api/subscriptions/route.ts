@@ -1,54 +1,55 @@
 /**
  * Route: GET /api/subscriptions
+ * ------------------------------
+ * Endpoint principal pour l’affichage "liste plate" des souscriptions.
+ * Ne gère **pas** les groupements AG Grid → /api/subscriptions/grid est dédié à cela.
  *
- * Global filter / sort :
- * - Récupère TOUTES les subscriptions depuis developv4 (/overview) via pagination interne.
- * - Aplatit chaque item (format unique BFF).
- * - Merge automatiquement les données Neon via operationId.
- * - Applique les filtres et le tri sur le tableau GLOBAL:
- *   - Filtres texte: "contains" (case-insensitive).
- *   - Filtres numériques: égalité.
- *   - Filtres booléens: égalité.
- * - Applique ensuite limit/offset en local sur le tableau filtré.
+ * 🎯 Objectif
+ * Fournir au front une liste paginée de souscriptions aplanies (flatten),
+ * avec :
+ *   - filtres serveur (texte, numérique, booléens),
+ *   - tri serveur,
+ *   - pagination locale (limit / offset),
+ *   - enrichissement Neon (entry_fees_*, closing*, overridden…).
  *
- * Réponse:
- *   {
- *     items: [...],       // page filtrée + triée
- *     total: number,      // total d'items APRÈS filtres
- *     limit: number,
- *     offset: number
- *   }
+ * Two operating modes:
+ * --------------------
  *
- * Usage:
- *   /api/subscriptions?status=TO_BE_SENT&limit=20&offset=0
- *   /api/subscriptions?closingName=clos&sort=entry_fees_amount&order=desc
- *   /api/subscriptions?teamInternal=true&amountCurrency=EUR
- *   /api/subscriptions?raw=1     → renvoie la 1ère page brute developv4 (debug)
- */
-
-/**
- * Route optimisée: GET /api/subscriptions
+ * 1) 🚀 Mode rapide (pas de filtres globaux)
+ *    - Appelle upstream /overview avec page + size + sort (= très rapide).
+ *    - Merge uniquement les extras Neon des lignes visibles.
+ *    - Upstream gère le tri + pagination.
+ *    - Retour immédiat.
  *
- * Deux modes :
- *
- * 1) Mode rapide (pas de filtre global) :
- *    - Appel d'une seule page upstream (page/size/sort, + status si fourni)
- *    - Merge Neon uniquement pour les items visibles
- *    - Tri & pagination gérés par upstream
- *
- * 2) Mode global-filter (si filtre sur champs aplatis / Neon) :
- *    - Charge TOUTES les pages upstream (PAGE_SIZE)
- *    - Merge Neon pour tout
- *    - Applique filtres + tri en local
- *    - Applique ensuite limit/offset en local
+ * 2) 🔴 Mode global (filtres complexes)
+ *    - Déclenché si un filtre porte sur un champ aplatit / Neon.
+ *    - Charge *toutes* les souscriptions (via loadAllFlattenedSubscriptions()).
+ *        → pagination interne developv4 /overview
+ *        → merge Neon
+ *        → flatten complet
+ *    - Applique tous les filtres globalement :
+ *         • texte (contains, case-insensitive)
+ *         • numériques (égalité, min, max)
+ *         • booléens (égalité stricte)
+ *    - Applique ensuite tri + slice (limit/offset).
  *
  * Réponse :
  *   {
- *     items: [...],
- *     total: number,  // après filtres
+ *     items: [...],    // tableau filtré + trié + paginé
+ *     total: number,   // total des items APRÈS filtres
  *     limit: number,
  *     offset: number
  *   }
+ *
+ * 🧪 Mode debug :
+ *   /api/subscriptions?raw=1
+ *   → renvoie la première page upstream (overview brut), sans flatten ni Neon.
+ *
+ * 💡 Notes
+ * - Le chargement global (mode 2) est désormais factorisé dans
+ *     lib/subscriptions.ts → loadAllFlattenedSubscriptions()
+ * - Cette route reste strictement dédiée à la vue “liste plate”.
+ *   La vue groupée est gérée par /api/subscriptions/grid.
  */
 
 export const runtime = 'nodejs';
@@ -58,6 +59,7 @@ import { upstream } from '@/lib/http';
 import { selectExtrasByOperationId } from '@/lib/db';
 import { flattenSubscription } from '@/lib/flatten';
 import { withCors, handleOptions } from '@/lib/cors';
+import { loadAllFlattenedSubscriptions } from '@/lib/subscriptions';
 
 type SourceList = {
   content?: any[];
@@ -66,8 +68,6 @@ type SourceList = {
   totalElements?: number;
   totalPages?: number;
 };
-
-const PAGE_SIZE = 1000; // global mode: assez grand pour tout prendre en 1 appel
 
 // Champs filtrables côté BFF
 const TEXT_FILTER_FIELDS = [
@@ -135,37 +135,6 @@ function cookieHeaderFrom(req: NextRequest) {
     return `accessToken=${process.env.UPSTREAM_ACCESS_TOKEN}`;
   }
   return '';
-}
-
-/** Appel direct à l'overview upstream (global mode) */
-async function upstreamOverview(page: number, size: number, cookie: string) {
-  const base = process.env.UPSTREAM_API_BASE_URL!;
-  const url = `${base}/overview?page=${page}&size=${size}`;
-  const payload = {
-    status: [],
-    partIds: [],
-    personTypes: [],
-    internal: false,
-    timeZone: 'Europe/Paris',
-  };
-  const res = await fetch(url, {
-    method: 'POST',
-    headers: {
-      Accept: 'application/json',
-      'Content-Type': 'application/json',
-      ...(cookie ? { Cookie: cookie } : {}),
-    },
-    body: JSON.stringify(payload),
-    cache: 'no-store',
-  });
-
-  if (!res.ok) {
-    const text = await res.text();
-    throw new Error(
-      `Upstream ${res.status} ${res.statusText} @ ${url} :: ${text.slice(0, 250)}`
-    );
-  }
-  return res.json() as Promise<SourceList & { number?: number; size?: number }>;
 }
 
 function parseNumber(value: string | null): number | null {
@@ -291,49 +260,10 @@ export async function GET(req: NextRequest) {
   /**
    * 🔴 MODE GLOBAL
    * - Filtre sur champs aplatis / Neon
-   * - On charge toutes les pages upstream
-   * - Merge Neon global
+   * - On charge toutes les pages upstream via loadAllFlattenedSubscriptions
    * - Filtre / tri / pagination local
    */
-  let page = 0;
-  let full: any[] = [];
-  let maxPages = 10;
-
-  while (page < maxPages) {
-    const data = await upstreamOverview(page, PAGE_SIZE, cookie);
-
-    const list =
-      Array.isArray(data.content) ? data.content :
-      Array.isArray(data.items)   ? data.items   : [];
-
-    full = full.concat(list);
-
-    const totalPages =
-      typeof data.totalPages === 'number'
-        ? data.totalPages
-        : typeof data.total === 'number'
-        ? Math.ceil(data.total / PAGE_SIZE)
-        : null;
-
-    if (totalPages != null) maxPages = totalPages;
-    if (list.length < PAGE_SIZE) break;
-
-    page++;
-  }
-
-  const opIds = full
-    .map((i) => i?.operationId ?? i?.operation?.id ?? null)
-    .filter(Boolean) as string[];
-
-  let extras = new Map<string, any>();
-  if (opIds.length) {
-    extras = await selectExtrasByOperationId(opIds);
-  }
-
-  let flattened = full.map((it) => {
-    const opId = it?.operationId ?? it?.operation?.id ?? '';
-    return flattenSubscription(it, extras.get(opId) ?? null);
-  });
+  let flattened = await loadAllFlattenedSubscriptions(cookie);
 
   // 1) Filtre status (si présent) en plus des filtres "global"
   const statusFilter = url.searchParams.get('status');
@@ -394,8 +324,8 @@ export async function GET(req: NextRequest) {
   // 5) Tri local
   if (sortField) {
     flattened.sort((a: any, b: any) => {
-      const va = a[sortField];
-      const vb = b[sortField];
+      const va = (a as any)[sortField];
+      const vb = (b as any)[sortField];
 
       if (va == null && vb == null) return 0;
       if (va == null) return order === 'asc' ? -1 : 1;

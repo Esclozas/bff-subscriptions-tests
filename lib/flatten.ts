@@ -25,6 +25,10 @@ export type Flattened = {
   partId: string | null;
   partName: string | null;
 
+  // Fonds (alias du produit pour le groupement)
+  fundId: string | null;
+  fundName: string | null;
+
   // Investisseur
   investorId: string | null;
   investorType: string | null;
@@ -39,6 +43,10 @@ export type Flattened = {
   teamId: string | null;
   teamName: string | null;
   teamInternal: boolean | null;
+
+  // Distributeur (alias de l’owner pour le groupement)
+  distributorId: string | null;
+  distributorName: string | null;
 
   // Owner
   ownerId: string | null;
@@ -92,6 +100,13 @@ export function flattenSubscription(item: any, extra?: Extra | null): Flattened 
   const entry_fees_assigned_manual_by = extra?.updatedBy ?? null;
   const entry_fees_assigned_comment = extra?.entryFeesAssignedComment ?? null;
 
+  // Alias pour groupement
+  const fundId = product?.id ?? null;
+  const fundName = product?.name ?? null;
+
+  const distributorId = owner?.id ?? null;
+  const distributorName = owner?.name ?? null;
+
   return {
     subscriptionId: item?.id ?? null,
     status: item?.status ?? null,
@@ -106,6 +121,9 @@ export function flattenSubscription(item: any, extra?: Extra | null): Flattened 
     partId: part?.id ?? null,
     partName: part?.name ?? null,
 
+    fundId,
+    fundName,
+
     investorId: investor?.id ?? null,
     investorType: investor?.personType ?? null,
     investorName: investor?.name ?? null,
@@ -117,6 +135,9 @@ export function flattenSubscription(item: any, extra?: Extra | null): Flattened 
     teamId: team?.id ?? null,
     teamName: team?.name ?? null,
     teamInternal: team?.internal ?? null,
+
+    distributorId,
+    distributorName,
 
     ownerId: owner?.id ?? null,
     ownerName: owner?.name ?? null,
