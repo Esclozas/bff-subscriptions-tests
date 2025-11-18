@@ -160,7 +160,7 @@ export async function GET(req: NextRequest) {
   const sortField = url.searchParams.get('sort') ?? '';
   const sortParam = sortField ? `${sortField},${order}` : '';
 
-  const limit = Math.min(Number(url.searchParams.get('limit') ?? '250'), 250);
+  const limit = Math.min(Number(url.searchParams.get('limit') ?? '5000'), 5000);
   const offset = Math.max(Number(url.searchParams.get('offset') ?? '0'), 0);
 
   // Debug : renvoyer tel quel la première page upstream

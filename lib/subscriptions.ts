@@ -35,7 +35,8 @@ type SourceList = {
   totalPages?: number;
 };
 
-const PAGE_SIZE = 5000;
+// PAGE_SIZE doit matcher le max réellement utilisé par /overview (actuellement 2000)
+const PAGE_SIZE = 2000;
 
 /** Appel direct à l'overview upstream, identique à ce que tu faisais en mode global */
 async function upstreamOverview(page: number, size: number, cookie: string) {
@@ -117,5 +118,47 @@ export async function loadAllFlattenedSubscriptions(
     return flattenSubscription(it, extras.get(opId) ?? null);
   });
 
+    if (process.env.NODE_ENV !== 'production') {
+    logInconsistentIdNamePairs(flattened);
+    }
+
   return flattened;
+}
+
+// ------------------------------------------------------------
+// DEBUG : vérifie cohérence ID ↔ Name pour aider AG Grid
+// ------------------------------------------------------------
+
+function logInconsistentIdNamePairs(rows: Flattened[]) {
+  type PairMap = Map<string, Set<string>>;
+
+  const check = (fieldId: keyof Flattened, fieldName: keyof Flattened, label: string) => {
+    const map: PairMap = new Map();
+
+    for (const r of rows) {
+      const id = (r as any)[fieldId];
+      const name = (r as any)[fieldName];
+      if (!id) continue;
+
+      const set = map.get(String(id)) ?? new Set<string>();
+      if (name != null) set.add(String(name));
+      map.set(String(id), set);
+    }
+
+    for (const [id, names] of map.entries()) {
+      if (names.size > 1) {
+        console.warn(
+          `[BFF DEBUG] Inconsistency for ${label}: id=${id} has multiple names:`,
+          Array.from(names),
+        );
+      }
+    }
+  };
+
+  check('fundId', 'fundName', 'fund');
+  check('partId', 'partName', 'part');
+  check('closingId', 'closingName', 'closing');
+  check('teamId', 'teamName', 'team');
+  check('distributorId', 'distributorName', 'distributor');
+  check('investorId', 'investorName', 'investor');
 }
