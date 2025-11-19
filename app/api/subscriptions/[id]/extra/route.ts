@@ -37,6 +37,7 @@ const BodySchema = z.object({
   entry_fees_percent: z.number().nullable().optional(),
   entry_fees_amount: z.number().nullable().optional(),
   entry_fees_amount_total: z.number().nullable().optional(),
+  entry_fees_assigned_amount: z.number().nullable().optional(),
   entry_fees_assigned_amount_total: z.number().nullable().optional(),
   entry_fees_assigned_overridden: z.boolean().nullable().optional(),
   entry_fees_assigned_manual_by: z.string().nullable().optional(),
@@ -129,6 +130,8 @@ export async function PUT(req: NextRequest, context: Ctx) {
         (body.retroAmount != null ? body.retroAmount : null),
 
       entryFeesAmountTotal: body.entry_fees_amount_total ?? null,
+  
+      entryFeesAssignedAmount: body.entry_fees_assigned_amount ?? null,
       entryFeesAssignedAmountTotal: body.entry_fees_assigned_amount_total ?? null,
       entryFeesAssignedOverridden: body.entry_fees_assigned_overridden ?? null,
 

@@ -178,6 +178,7 @@ export async function upsertExtraByOperationId(
       entry_fees_percent,
       entry_fees_amount,
       entry_fees_amount_total,
+      entry_fees_assigned_amount,
       entry_fees_assigned_amount_total,
       entry_fees_assigned_overridden,
       entry_fees_assigned_comment,
