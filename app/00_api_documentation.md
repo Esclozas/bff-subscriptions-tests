@@ -152,6 +152,7 @@ DELETE :
   "investorType": "string",
   "investorName": "string",
   "investorFirstName": "string",
+  "investorFullName": "string",
 
   "productId": "string",
   "productName": "string",
@@ -161,8 +162,7 @@ DELETE :
   "teamInternal": true,
 
   "ownerId": "string",
-  "ownerName": "string",
-  "ownerFirstName": "string",
+  "ownerFullName": "string",
   "ownerEmail": "string",
   "ownerInternal": false,
 
@@ -179,16 +179,15 @@ DELETE :
   "entry_fees_assigned_comment": "string"
 }
 
+
 ---
 
 # 📌 JSON aplati final (JSON expliqué)
 
-# 📌 JSON aplati final (JSON expliqué)
-
-| Champ                            | Type       | Origine   | Description courte                           |
+| Champ                             | Type       | Origine   | Description courte                          |
 |----------------------------------|------------|-----------|----------------------------------------------|
 | subscriptionId                   | string     | upstream  | ID de la souscription                        |
-| status                           | string     | upstream  | Statut (DONE, AWAITING…)                     |
+| status                           | string     | upstream  | Statut (DONE, AWAITING…)                    |
 | createdDate                      | string     | upstream  | Date création (ISO-8601)                     |
 | updatedDate                      | string     | upstream  | Date mise à jour (ISO-8601)                  |
 
@@ -198,18 +197,19 @@ DELETE :
 | operationId                      | string     | upstream  | Clé pour joindre Neon                        |
 
 | amountValue                      | number     | upstream  | Montant                                      |
-| amountCurrency                   | string     | upstream  | EUR, USD…                                    |
+| amountCurrency                   | string     | upstream  | Devise (EUR, USD…)                           |
 
 | partId                           | string     | upstream  | ID de la part                                |
 | partName                         | string     | upstream  | Nom de la part                               |
 
-| fundId                           | string     | upstream  | Alias du produit                             |
-| fundName                         | string     | upstream  | Alias du produit                             |
+| fundId                           | string     | upstream  | ID du fonds                                   |
+| fundName                         | string     | upstream  | Nom du fonds                                  |
 
 | investorId                       | string     | upstream  | ID investisseur                              |
 | investorType                     | string     | upstream  | PERSON / COMPANY                             |
 | investorName                     | string     | upstream  | Nom                                          |
 | investorFirstName                | string     | upstream  | Prénom                                       |
+| investorFullName                 | string     | upstream  | Prénom + Nom                                 |
 
 | productId                        | string     | upstream  | ID produit                                   |
 | productName                      | string     | upstream  | Nom produit                                  |
@@ -219,8 +219,7 @@ DELETE :
 | teamInternal                     | boolean    | upstream  | Interne ?                                    |
 
 | ownerId                          | string     | upstream  | ID du propriétaire                           |
-| ownerName                        | string     | upstream  | Nom du propriétaire                          |
-| ownerFirstName                   | string     | upstream  | Prénom du propriétaire                       |
+| ownerFullName                    | string     | upstream  | Prénom + Nom du propriétaire                 |
 | ownerEmail                       | string     | upstream  | Email du propriétaire                        |
 | ownerInternal                    | boolean    | upstream  | Interne ?                                    |
 
@@ -230,11 +229,11 @@ DELETE :
 | entry_fees_percent               | number     | Neon      | % frais d’entrée                             |
 | entry_fees_amount                | number     | Neon      | Montant                                      |
 | entry_fees_amount_total          | number     | Neon      | Montant total                                |
-| entry_fees_assigned_amount       | number     | Neon      | Montant assigné (nouveau champ)              |
+| entry_fees_assigned_amount       | number     | Neon      | Montant assigné                              |
 | entry_fees_assigned_amount_total | number     | Neon      | Montant total assigné                        |
 | entry_fees_assigned_overridden   | boolean    | Neon      | Override ?                                   |
 | entry_fees_assigned_manual_by    | string     | Neon      | Dernière modification par                    |
-| entry_fees_assigned_comment      | string     | Neon      | Commentaire interne                          |
+| entry_fees_assigned_comment      | string     | Neon      | Commentaire interne                           |
 
 
 

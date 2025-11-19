@@ -49,8 +49,7 @@ export type Flattened = {
 
   // Owner
   ownerId: string | null;
-  ownerName: string | null;
-  ownerFirstName: string | null;
+  ownerFullName: string | null;
   ownerEmail: string | null;
   ownerInternal: boolean | null;
 
@@ -82,6 +81,8 @@ export function flattenSubscription(item: any, extra?: Extra | null): Flattened 
   const team = item?.team ?? {};
   const product = item?.product ?? {};
   const part = item?.part ?? {};
+
+  const ownerFullName = [owner?.firstName, owner?.name].filter(Boolean).join(' ') || null;
 
   // operationId côté upstream (string, pas forcément UUID)
   const operationId =
@@ -139,8 +140,7 @@ export function flattenSubscription(item: any, extra?: Extra | null): Flattened 
     teamInternal: team?.internal ?? null,
 
     ownerId: owner?.id ?? null,
-    ownerName: owner?.name ?? null,
-    ownerFirstName: owner?.firstName ?? null,
+    ownerFullName,
     ownerEmail: owner?.email ?? null,
     ownerInternal: owner?.internal ?? null,
 

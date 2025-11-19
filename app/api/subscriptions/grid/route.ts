@@ -131,7 +131,7 @@ const NAME_FIELD_BY_ID: Partial<Record<keyof Flattened, keyof Flattened>> = {
   partId: 'partName',
   closingId: 'closingName',
   teamId: 'teamName',
-  ownerId: 'ownerName',
+  ownerId: 'ownerFullName',
   investorId: 'investorName',
 };
 

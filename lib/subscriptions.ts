@@ -157,6 +157,6 @@ function logInconsistentIdNamePairs(rows: Flattened[]) {
   check('partId', 'partName', 'part');
   check('closingId', 'closingName', 'closing');
   check('teamId', 'teamName', 'team');
-  check('ownerId', 'ownerName', 'owner');
+  check('ownerId', 'ownerFullName', 'owner');
   check('investorId', 'investorName', 'investor');
 }
