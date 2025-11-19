@@ -26,6 +26,8 @@
 
 import { selectExtrasByOperationId } from './db';
 import { flattenSubscription, type Flattened } from './flatten';
+import { upstream } from './http';
+
 
 type SourceList = {
   content?: any[];
@@ -40,8 +42,11 @@ const PAGE_SIZE = 2000;
 
 /** Appel direct à l'overview upstream, identique à ce que tu faisais en mode global */
 async function upstreamOverview(page: number, size: number, cookie: string) {
-  const base = process.env.UPSTREAM_API_BASE_URL!;
-  const url = `${base}/overview?page=${page}&size=${size}`;
+  const params = new URLSearchParams({
+    page: String(page),
+    size: String(size),
+  });
+
   const payload = {
     status: [],
     partIds: [],
@@ -50,26 +55,19 @@ async function upstreamOverview(page: number, size: number, cookie: string) {
     timeZone: 'Europe/Paris',
   };
 
-  const res = await fetch(url, {
+  const data = await upstream(`/overview?${params.toString()}`, {
     method: 'POST',
     headers: {
-      Accept: 'application/json',
       'Content-Type': 'application/json',
+      'X-jwt': process.env.UPSTREAM_ACCESS_TOKEN || '',
       ...(cookie ? { Cookie: cookie } : {}),
     },
     body: JSON.stringify(payload),
-    cache: 'no-store',
   });
 
-  if (!res.ok) {
-    const text = await res.text();
-    throw new Error(
-      `Upstream ${res.status} ${res.statusText} @ ${url} :: ${text.slice(0, 250)}`
-    );
-  }
-
-  return res.json() as Promise<SourceList>;
+  return data as SourceList;
 }
+
 
 /**
  * Charge TOUTES les souscriptions depuis /overview,
@@ -159,6 +157,6 @@ function logInconsistentIdNamePairs(rows: Flattened[]) {
   check('partId', 'partName', 'part');
   check('closingId', 'closingName', 'closing');
   check('teamId', 'teamName', 'team');
-  check('distributorId', 'distributorName', 'distributor');
+  check('ownerId', 'ownerName', 'owner');
   check('investorId', 'investorName', 'investor');
 }

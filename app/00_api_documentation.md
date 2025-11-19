@@ -134,6 +134,9 @@ DELETE :
   "createdDate": "string",
   "updatedDate": "string",
 
+  "signatureDate": "string",
+  "validationDate": "string",
+
   "operationId": "string",
 
   "amountValue": 0,
@@ -141,6 +144,9 @@ DELETE :
 
   "partId": "string",
   "partName": "string",
+
+  "fundId": "string",
+  "fundName": "string",
 
   "investorId": "string",
   "investorType": "string",
@@ -166,6 +172,7 @@ DELETE :
   "entry_fees_percent": 0,
   "entry_fees_amount": 0,
   "entry_fees_amount_total": 0,
+  "entry_fees_assigned_amount": 0,
   "entry_fees_assigned_amount_total": 0,
   "entry_fees_assigned_overridden": true,
   "entry_fees_assigned_manual_by": "string",
@@ -176,49 +183,59 @@ DELETE :
 
 # 📌 JSON aplati final (JSON expliqué)
 
-| Champ                             | Type       | Origine   | Description courte   |
-|----------------------------------|------------|-----------|-----------------------|
-| subscriptionId                   | string     | upstream  | ID de la souscription |
-| status                           | string     | upstream  | Statut (TO_BE_SENT…)  |
-| createdDate                      | string     | upstream  | ISO-8601              |
-| updatedDate                      | string     | upstream  | ISO-8601              |
+# 📌 JSON aplati final (JSON expliqué)
 
-| operationId                      | string     | upstream  | Clé pour joindre Neon |
+| Champ                            | Type       | Origine   | Description courte                           |
+|----------------------------------|------------|-----------|----------------------------------------------|
+| subscriptionId                   | string     | upstream  | ID de la souscription                        |
+| status                           | string     | upstream  | Statut (DONE, AWAITING…)                     |
+| createdDate                      | string     | upstream  | Date création (ISO-8601)                     |
+| updatedDate                      | string     | upstream  | Date mise à jour (ISO-8601)                  |
 
-| amountValue                      | number     | upstream  | Montant               |
-| amountCurrency                   | string     | upstream  | EUR, USD…             |
+| signatureDate                    | string     | upstream  | Date de signature client                     |
+| validationDate                   | string     | upstream  | Date de validation interne                   |
 
-| partId                           | string     | upstream  | ID de la part         |
-| partName                         | string     | upstream  | Nom                   |
+| operationId                      | string     | upstream  | Clé pour joindre Neon                        |
 
-| investorId                       | string     | upstream  | ID investisseur       |
-| investorType                     | string     | upstream  | PERSON / COMPANY      |
-| investorName                     | string     | upstream  | Nom                   |
-| investorFirstName                | string     | upstream  | Prénom                |
+| amountValue                      | number     | upstream  | Montant                                      |
+| amountCurrency                   | string     | upstream  | EUR, USD…                                    |
 
-| productId                        | string     | upstream  | ID produit            |
-| productName                      | string     | upstream  | Nom                   |
+| partId                           | string     | upstream  | ID de la part                                |
+| partName                         | string     | upstream  | Nom de la part                               |
 
-| teamId                           | string     | upstream  | ID équipe             |
-| teamName                         | string     | upstream  | Nom                   |
-| teamInternal                     | boolean    | upstream  | Interne ?             |
+| fundId                           | string     | upstream  | Alias du produit                             |
+| fundName                         | string     | upstream  | Alias du produit                             |
 
-| ownerId                          | string     | upstream  | ID owner              |
-| ownerName                        | string     | upstream  | Nom                   |
-| ownerFirstName                   | string     | upstream  | Prénom                |
-| ownerEmail                       | string     | upstream  | Email                 |
-| ownerInternal                    | boolean    | upstream  | Interne ?             |
+| investorId                       | string     | upstream  | ID investisseur                              |
+| investorType                     | string     | upstream  | PERSON / COMPANY                             |
+| investorName                     | string     | upstream  | Nom                                          |
+| investorFirstName                | string     | upstream  | Prénom                                       |
 
-| closingId                        | string     | Neon      | ID closing            |
-| closingName                      | string     | Neon      | Nom closing           |
+| productId                        | string     | upstream  | ID produit                                   |
+| productName                      | string     | upstream  | Nom produit                                  |
 
-| entry_fees_percent               | number     | Neon      | % frais entrée        |
-| entry_fees_amount                | number     | Neon      | Montant               |
-| entry_fees_amount_total          | number     | Neon      | Montant total         |
-| entry_fees_assigned_amount_total | number     | Neon      | Montant assigné       |
-| entry_fees_assigned_overridden   | boolean    | Neon      | Override ?            |
-| entry_fees_assigned_manual_by    | string     | Neon      | Dernière modif par    |
-| entry_fees_assigned_comment      | string     | Neon      | Commentaire           |
+| teamId                           | string     | upstream  | ID équipe                                    |
+| teamName                         | string     | upstream  | Nom équipe                                   |
+| teamInternal                     | boolean    | upstream  | Interne ?                                    |
+
+| ownerId                          | string     | upstream  | ID du propriétaire                           |
+| ownerName                        | string     | upstream  | Nom du propriétaire                          |
+| ownerFirstName                   | string     | upstream  | Prénom du propriétaire                       |
+| ownerEmail                       | string     | upstream  | Email du propriétaire                        |
+| ownerInternal                    | boolean    | upstream  | Interne ?                                    |
+
+| closingId                        | string     | Neon      | ID closing                                   |
+| closingName                      | string     | Neon      | Nom closing                                  |
+
+| entry_fees_percent               | number     | Neon      | % frais d’entrée                             |
+| entry_fees_amount                | number     | Neon      | Montant                                      |
+| entry_fees_amount_total          | number     | Neon      | Montant total                                |
+| entry_fees_assigned_amount       | number     | Neon      | Montant assigné (nouveau champ)              |
+| entry_fees_assigned_amount_total | number     | Neon      | Montant total assigné                        |
+| entry_fees_assigned_overridden   | boolean    | Neon      | Override ?                                   |
+| entry_fees_assigned_manual_by    | string     | Neon      | Dernière modification par                    |
+| entry_fees_assigned_comment      | string     | Neon      | Commentaire interne                          |
+
 
 
 # -------------------------------------------------------------------------------------------

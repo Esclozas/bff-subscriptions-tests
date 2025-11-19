@@ -14,6 +14,9 @@ export type Flattened = {
   createdDate: string | null;
   updatedDate: string | null;
 
+  signatureDate: string | null;
+  validationDate: string | null;
+
   // 💡 utile pour debug / server: jointure Neon par operationId
   operationId: string | null;
 
@@ -44,10 +47,6 @@ export type Flattened = {
   teamName: string | null;
   teamInternal: boolean | null;
 
-  // Distributeur (alias de l’owner pour le groupement)
-  distributorId: string | null;
-  distributorName: string | null;
-
   // Owner
   ownerId: string | null;
   ownerName: string | null;
@@ -61,6 +60,8 @@ export type Flattened = {
   entry_fees_percent: number | null;
   entry_fees_amount: number | null;
   entry_fees_amount_total: number | null;
+
+  entry_fees_assigned_amount: number | null;
   entry_fees_assigned_amount_total: number | null;
   entry_fees_assigned_overridden: boolean | null;
   entry_fees_assigned_manual_by: string | null;
@@ -95,6 +96,7 @@ export function flattenSubscription(item: any, extra?: Extra | null): Flattened 
   const entry_fees_percent = extra?.entryFeesPercent ?? null;
   const entry_fees_amount = extra?.entryFeesAmount ?? null;
   const entry_fees_amount_total = extra?.entryFeesAmountTotal ?? null;
+  const entry_fees_assigned_amount = extra?.entryFeesAssignedAmount ?? null;
   const entry_fees_assigned_amount_total = extra?.entryFeesAssignedAmountTotal ?? null;
   const entry_fees_assigned_overridden = extra?.entryFeesAssignedOverridden ?? null;
   const entry_fees_assigned_manual_by = extra?.updatedBy ?? null;
@@ -104,14 +106,14 @@ export function flattenSubscription(item: any, extra?: Extra | null): Flattened 
   const fundId = product?.id ?? null;
   const fundName = product?.name ?? null;
 
-  const distributorId = owner?.id ?? null;
-  const distributorName = owner?.name ?? null;
-
   return {
     subscriptionId: item?.id ?? null,
     status: item?.status ?? null,
     createdDate: toUtcZ(item?.createdDate),
     updatedDate: toUtcZ(item?.updatedDate),
+
+    signatureDate: toUtcZ(item?.signatureDate),
+    validationDate: toUtcZ(item?.validationDate),
 
     operationId,
 
@@ -136,9 +138,6 @@ export function flattenSubscription(item: any, extra?: Extra | null): Flattened 
     teamName: team?.name ?? null,
     teamInternal: team?.internal ?? null,
 
-    distributorId,
-    distributorName,
-
     ownerId: owner?.id ?? null,
     ownerName: owner?.name ?? null,
     ownerFirstName: owner?.firstName ?? null,
@@ -150,6 +149,7 @@ export function flattenSubscription(item: any, extra?: Extra | null): Flattened 
     entry_fees_percent,
     entry_fees_amount,
     entry_fees_amount_total,
+    entry_fees_assigned_amount,
     entry_fees_assigned_amount_total,
     entry_fees_assigned_overridden,
     entry_fees_assigned_manual_by,

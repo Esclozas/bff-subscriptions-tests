@@ -24,6 +24,8 @@ export type Extra = {
   entryFeesPercent: number | null;
   entryFeesAmount: number | null;
   entryFeesAmountTotal: number | null;
+
+  entryFeesAssignedAmount: number | null;
   entryFeesAssignedAmountTotal: number | null;
   entryFeesAssignedOverridden: boolean | null;
 
@@ -50,6 +52,8 @@ export async function selectExtrasByOperationId(operationIds: string[]) {
     entry_fees_percent: string | number | null;
     entry_fees_amount: string | number | null;
     entry_fees_amount_total: string | number | null;
+ 
+    entry_fees_assigned_amount: string | number | null;
     entry_fees_assigned_amount_total: string | number | null;
     entry_fees_assigned_overridden: boolean | null;
     entry_fees_assigned_comment: string | null;
@@ -64,6 +68,7 @@ export async function selectExtrasByOperationId(operationIds: string[]) {
       entry_fees_percent,
       entry_fees_amount,
       entry_fees_amount_total,
+      entry_fees_assigned_amount,
       entry_fees_assigned_amount_total,
       entry_fees_assigned_overridden,
       entry_fees_assigned_comment,
@@ -81,6 +86,8 @@ export async function selectExtrasByOperationId(operationIds: string[]) {
       entryFeesAmount: r.entry_fees_amount == null ? null : Number(r.entry_fees_amount),
       entryFeesAmountTotal:
         r.entry_fees_amount_total == null ? null : Number(r.entry_fees_amount_total),
+      entryFeesAssignedAmount:
+        r.entry_fees_assigned_amount == null ? null : Number(r.entry_fees_assigned_amount),
       entryFeesAssignedAmountTotal:
         r.entry_fees_assigned_amount_total == null
           ? null
@@ -103,6 +110,7 @@ export async function upsertExtraByOperationId(
     entryFeesPercent?: number | null;
     entryFeesAmount?: number | null;
     entryFeesAmountTotal?: number | null;
+    entryFeesAssignedAmount?: number | null;
     entryFeesAssignedAmountTotal?: number | null;
     entryFeesAssignedOverridden?: boolean | null;
 
@@ -118,6 +126,7 @@ export async function upsertExtraByOperationId(
     entry_fees_percent: string | number | null;
     entry_fees_amount: string | number | null;
     entry_fees_amount_total: string | number | null;
+    entry_fees_assigned_amount: string | number | null;
     entry_fees_assigned_amount_total: string | number | null;
     entry_fees_assigned_overridden: boolean | null;
     entry_fees_assigned_comment: string | null;
@@ -132,6 +141,7 @@ export async function upsertExtraByOperationId(
       entry_fees_percent,
       entry_fees_amount,
       entry_fees_amount_total,
+      entry_fees_assigned_amount, 
       entry_fees_assigned_amount_total,
       entry_fees_assigned_overridden,
       entry_fees_assigned_comment,
@@ -144,6 +154,7 @@ export async function upsertExtraByOperationId(
       ${body.entryFeesPercent ?? null},
       ${body.entryFeesAmount ?? null},
       ${body.entryFeesAmountTotal ?? null},
+      ${body.entryFeesAssignedAmount ?? null},
       ${body.entryFeesAssignedAmountTotal ?? null},
       ${body.entryFeesAssignedOverridden ?? null},
       ${body.entryFeesAssignedComment ?? null},
@@ -155,6 +166,7 @@ export async function upsertExtraByOperationId(
       entry_fees_percent = COALESCE(EXCLUDED.entry_fees_percent, ${sql.unsafe(TABLE)}.entry_fees_percent),
       entry_fees_amount = COALESCE(EXCLUDED.entry_fees_amount, ${sql.unsafe(TABLE)}.entry_fees_amount),
       entry_fees_amount_total = COALESCE(EXCLUDED.entry_fees_amount_total, ${sql.unsafe(TABLE)}.entry_fees_amount_total),
+      entry_fees_assigned_amount = COALESCE(EXCLUDED.entry_fees_assigned_amount, ${sql.unsafe(TABLE)}.entry_fees_assigned_amount),  
       entry_fees_assigned_amount_total = COALESCE(EXCLUDED.entry_fees_assigned_amount_total, ${sql.unsafe(TABLE)}.entry_fees_assigned_amount_total),
       entry_fees_assigned_overridden = COALESCE(EXCLUDED.entry_fees_assigned_overridden, ${sql.unsafe(TABLE)}.entry_fees_assigned_overridden),
       entry_fees_assigned_comment = COALESCE(EXCLUDED.entry_fees_assigned_comment, ${sql.unsafe(TABLE)}.entry_fees_assigned_comment),
@@ -181,6 +193,8 @@ export async function upsertExtraByOperationId(
         entryFeesAmount: r.entry_fees_amount == null ? null : Number(r.entry_fees_amount),
         entryFeesAmountTotal:
           r.entry_fees_amount_total == null ? null : Number(r.entry_fees_amount_total),
+        entryFeesAssignedAmount:
+          r.entry_fees_assigned_amount == null ? null : Number(r.entry_fees_assigned_amount),
         entryFeesAssignedAmountTotal:
           r.entry_fees_assigned_amount_total == null
             ? null

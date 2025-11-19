@@ -176,6 +176,7 @@ export async function GET(req: NextRequest) {
       headers: {
         Accept: 'application/json',
         'Content-Type': 'application/json',
+        'X-jwt': process.env.UPSTREAM_ACCESS_TOKEN || '',
         ...(cookie ? { Cookie: cookie } : {}),
       },
       body: JSON.stringify({
@@ -222,6 +223,8 @@ export async function GET(req: NextRequest) {
       headers: {
         Accept: 'application/json',
         'Content-Type': 'application/json',
+        'X-jwt': process.env.UPSTREAM_ACCESS_TOKEN || '',
+
         ...(cookie ? { Cookie: cookie } : {}),
       },
       body: JSON.stringify(payload),

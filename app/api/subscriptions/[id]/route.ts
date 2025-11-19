@@ -19,6 +19,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { selectExtrasByOperationId } from '@/lib/db';
 import { flattenSubscription } from '@/lib/flatten';
 import { withCors, handleOptions } from '@/lib/cors'; // 👈 import CORS
+import { upstream } from '@/lib/http';
 
 
 type Ctx = { params: Promise<{ id: string }> };
@@ -31,8 +32,11 @@ function cookieHeaderFrom(req: NextRequest) {
 }
 
 async function upstreamOverview(page: number, size: number, cookie: string) {
-  const base = process.env.UPSTREAM_API_BASE_URL!;
-  const url = `${base}/overview?page=${page}&size=${size}`;
+  const params = new URLSearchParams({
+    page: String(page),
+    size: String(size),
+  });
+
   const payload = {
     status: [],
     partIds: [],
@@ -40,21 +44,18 @@ async function upstreamOverview(page: number, size: number, cookie: string) {
     internal: false,
     timeZone: 'Europe/Paris',
   };
-  const res = await fetch(url, {
+
+  const data = await upstream(`/overview?${params.toString()}`, {
     method: 'POST',
     headers: {
-      Accept: 'application/json',
       'Content-Type': 'application/json',
+      'X-jwt': process.env.UPSTREAM_ACCESS_TOKEN || '',
       ...(cookie ? { Cookie: cookie } : {}),
     },
     body: JSON.stringify(payload),
-    cache: 'no-store',
   });
-  if (!res.ok) {
-    const text = await res.text();
-    throw new Error(`Upstream ${res.status} ${res.statusText} @ ${url} :: ${text.slice(0, 200)}`);
-  }
-  return res.json() as Promise<{
+
+  return data as {
     content?: any[];
     items?: any[];
     totalElements?: number;
@@ -62,8 +63,9 @@ async function upstreamOverview(page: number, size: number, cookie: string) {
     totalPages?: number;
     number?: number;
     size?: number;
-  }>;
+  };
 }
+
 
 export async function GET(req: NextRequest, context: Ctx) {
   const { id } = await context.params;
