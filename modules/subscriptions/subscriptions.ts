@@ -26,7 +26,7 @@
 
 import { selectExtrasByOperationId } from './db';
 import { flattenSubscription, type Flattened } from './flatten';
-import { upstream } from './http';
+import { upstream } from '../../lib/http';
 
 
 type SourceList = {
@@ -155,7 +155,6 @@ function logInconsistentIdNamePairs(rows: Flattened[]) {
 
   check('fundId', 'fundName', 'fund');
   check('partId', 'partName', 'part');
-  check('closingId', 'closingName', 'closing');
   check('teamId', 'teamName', 'team');
   check('ownerId', 'ownerFullName', 'owner');
   check('investorId', 'investorName', 'investor');

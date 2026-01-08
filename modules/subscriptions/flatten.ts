@@ -54,17 +54,10 @@ export type Flattened = {
   ownerInternal: boolean | null;
 
   // Champs enrichis via Neon (format final pour l’UI)
-  closingId: string | null;
-  closingName: string | null;
   entry_fees_percent: number | null;
   entry_fees_amount: number | null;
   entry_fees_amount_total: number | null;
 
-  entry_fees_assigned_amount: number | null;
-  entry_fees_assigned_amount_total: number | null;
-  entry_fees_assigned_overridden: boolean | null;
-  entry_fees_assigned_manual_by: string | null;
-  entry_fees_assigned_comment: string | null;
 };
 
 /** Ajoute un Z si la date n’a pas déjà un offset ou un Z */
@@ -91,17 +84,10 @@ export function flattenSubscription(item: any, extra?: Extra | null): Flattened 
     null;
 
   // Valeurs venant de Neon (via Extra camelCase)
-  const closingId = extra?.closingId ?? null;
-  const closingName = extra?.closingName ?? null;
 
   const entry_fees_percent = extra?.entryFeesPercent ?? null;
   const entry_fees_amount = extra?.entryFeesAmount ?? null;
   const entry_fees_amount_total = extra?.entryFeesAmountTotal ?? null;
-  const entry_fees_assigned_amount = extra?.entryFeesAssignedAmount ?? null;
-  const entry_fees_assigned_amount_total = extra?.entryFeesAssignedAmountTotal ?? null;
-  const entry_fees_assigned_overridden = extra?.entryFeesAssignedOverridden ?? null;
-  const entry_fees_assigned_manual_by = extra?.updatedBy ?? null;
-  const entry_fees_assigned_comment = extra?.entryFeesAssignedComment ?? null;
 
   // Alias pour groupement
   const fundId = product?.id ?? null;
@@ -144,15 +130,8 @@ export function flattenSubscription(item: any, extra?: Extra | null): Flattened 
     ownerEmail: owner?.email ?? null,
     ownerInternal: owner?.internal ?? null,
 
-    closingId,
-    closingName,
     entry_fees_percent,
     entry_fees_amount,
     entry_fees_amount_total,
-    entry_fees_assigned_amount,
-    entry_fees_assigned_amount_total,
-    entry_fees_assigned_overridden,
-    entry_fees_assigned_manual_by,
-    entry_fees_assigned_comment,
   };
 }

@@ -16,8 +16,8 @@
 export const runtime = 'nodejs';
 
 import { NextRequest, NextResponse } from 'next/server';
-import { selectExtrasByOperationId } from '@/lib/db';
-import { flattenSubscription } from '@/lib/flatten';
+import { selectExtrasByOperationId } from '@/modules/subscriptions/db';
+import { flattenSubscription } from '@/modules/subscriptions/flatten';
 import { withCors, handleOptions } from '@/lib/cors'; // 👈 import CORS
 import { upstream } from '@/lib/http';
 

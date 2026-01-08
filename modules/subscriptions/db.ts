@@ -18,18 +18,10 @@ function getSql() {
 }
 
 export type Extra = {
-  closingId: string | null;
-  closingName: string | null;
-
   entryFeesPercent: number | null;
   entryFeesAmount: number | null;
   entryFeesAmountTotal: number | null;
 
-  entryFeesAssignedAmount: number | null;
-  entryFeesAssignedAmountTotal: number | null;
-  entryFeesAssignedOverridden: boolean | null;
-
-  entryFeesAssignedComment: string | null;
   updatedBy: string | null;
 };
 
@@ -47,31 +39,19 @@ export async function selectExtrasByOperationId(operationIds: string[]) {
 
   type Row = {
     operation_id: string;
-    closing_id: string | null;
-    closing_name: string | null;
     entry_fees_percent: string | number | null;
     entry_fees_amount: string | number | null;
     entry_fees_amount_total: string | number | null;
- 
-    entry_fees_assigned_amount: string | number | null;
-    entry_fees_assigned_amount_total: string | number | null;
-    entry_fees_assigned_overridden: boolean | null;
-    entry_fees_assigned_comment: string | null;
+
     updated_by: string | null;
   };
 
   const rows = (await sql`
     SELECT
       operation_id,
-      closing_id,
-      closing_name,
       entry_fees_percent,
       entry_fees_amount,
       entry_fees_amount_total,
-      entry_fees_assigned_amount,
-      entry_fees_assigned_amount_total,
-      entry_fees_assigned_overridden,
-      entry_fees_assigned_comment,
       updated_by
     FROM ${sql.unsafe(TABLE)}
     WHERE operation_id = ANY(${arrayLiteral}::text[])
@@ -80,20 +60,10 @@ export async function selectExtrasByOperationId(operationIds: string[]) {
   const map = new Map<string, Extra>();
   for (const r of rows) {
     map.set(r.operation_id, {
-      closingId: r.closing_id,
-      closingName: r.closing_name,
       entryFeesPercent: r.entry_fees_percent == null ? null : Number(r.entry_fees_percent),
       entryFeesAmount: r.entry_fees_amount == null ? null : Number(r.entry_fees_amount),
       entryFeesAmountTotal:
         r.entry_fees_amount_total == null ? null : Number(r.entry_fees_amount_total),
-      entryFeesAssignedAmount:
-        r.entry_fees_assigned_amount == null ? null : Number(r.entry_fees_assigned_amount),
-      entryFeesAssignedAmountTotal:
-        r.entry_fees_assigned_amount_total == null
-          ? null
-          : Number(r.entry_fees_assigned_amount_total),
-      entryFeesAssignedOverridden: r.entry_fees_assigned_overridden,
-      entryFeesAssignedComment: r.entry_fees_assigned_comment ?? null,
       updatedBy: r.updated_by ?? null,
     });
   }
@@ -104,72 +74,39 @@ export async function selectExtrasByOperationId(operationIds: string[]) {
 export async function upsertExtraByOperationId(
   operationId: string,
   body: {
-    closingId?: string | null;
-    closingName?: string | null;
-
     entryFeesPercent?: number | null;
     entryFeesAmount?: number | null;
     entryFeesAmountTotal?: number | null;
-    entryFeesAssignedAmount?: number | null;
-    entryFeesAssignedAmountTotal?: number | null;
-    entryFeesAssignedOverridden?: boolean | null;
-
-    entryFeesAssignedManualBy?: string | null;   // → updated_by
-    entryFeesAssignedComment?: string | null;    // → entry_fees_assigned_comment
   }
 ) {
   const sql = getSql();
 
   type UpsertRow = {
-    closing_id: string | null;
-    closing_name: string | null;
     entry_fees_percent: string | number | null;
     entry_fees_amount: string | number | null;
     entry_fees_amount_total: string | number | null;
-    entry_fees_assigned_amount: string | number | null;
-    entry_fees_assigned_amount_total: string | number | null;
-    entry_fees_assigned_overridden: boolean | null;
-    entry_fees_assigned_comment: string | null;
     updated_by: string | null;
   };
 
   const rows = (await sql`
     INSERT INTO ${sql.unsafe(TABLE)} (
       operation_id,
-      closing_id,
-      closing_name,
       entry_fees_percent,
       entry_fees_amount,
       entry_fees_amount_total,
-      entry_fees_assigned_amount, 
-      entry_fees_assigned_amount_total,
-      entry_fees_assigned_overridden,
-      entry_fees_assigned_comment,
       updated_by
     )
     VALUES (
       ${operationId},
-      ${body.closingId ?? null}::uuid,
-      ${body.closingName ?? null},
       ${body.entryFeesPercent ?? null},
       ${body.entryFeesAmount ?? null},
       ${body.entryFeesAmountTotal ?? null},
-      ${body.entryFeesAssignedAmount ?? null},
-      ${body.entryFeesAssignedAmountTotal ?? null},
-      ${body.entryFeesAssignedOverridden ?? null},
-      ${body.entryFeesAssignedComment ?? null},
-      ${body.entryFeesAssignedManualBy ?? null}
+
     )
     ON CONFLICT (operation_id) DO UPDATE SET
-      closing_id = COALESCE(EXCLUDED.closing_id, ${sql.unsafe(TABLE)}.closing_id),
-      closing_name = COALESCE(EXCLUDED.closing_name, ${sql.unsafe(TABLE)}.closing_name),
       entry_fees_percent = COALESCE(EXCLUDED.entry_fees_percent, ${sql.unsafe(TABLE)}.entry_fees_percent),
       entry_fees_amount = COALESCE(EXCLUDED.entry_fees_amount, ${sql.unsafe(TABLE)}.entry_fees_amount),
       entry_fees_amount_total = COALESCE(EXCLUDED.entry_fees_amount_total, ${sql.unsafe(TABLE)}.entry_fees_amount_total),
-      entry_fees_assigned_amount = COALESCE(EXCLUDED.entry_fees_assigned_amount, ${sql.unsafe(TABLE)}.entry_fees_assigned_amount),  
-      entry_fees_assigned_amount_total = COALESCE(EXCLUDED.entry_fees_assigned_amount_total, ${sql.unsafe(TABLE)}.entry_fees_assigned_amount_total),
-      entry_fees_assigned_overridden = COALESCE(EXCLUDED.entry_fees_assigned_overridden, ${sql.unsafe(TABLE)}.entry_fees_assigned_overridden),
-      entry_fees_assigned_comment = COALESCE(EXCLUDED.entry_fees_assigned_comment, ${sql.unsafe(TABLE)}.entry_fees_assigned_comment),
       updated_by = COALESCE(EXCLUDED.updated_by, ${sql.unsafe(TABLE)}.updated_by),
       updated_at = NOW()
     RETURNING
@@ -178,30 +115,16 @@ export async function upsertExtraByOperationId(
       entry_fees_percent,
       entry_fees_amount,
       entry_fees_amount_total,
-      entry_fees_assigned_amount,
-      entry_fees_assigned_amount_total,
-      entry_fees_assigned_overridden,
-      entry_fees_assigned_comment,
       updated_by
   `) as unknown as UpsertRow[];
 
   const r = rows[0];
   return r
     ? {
-        closingId: r.closing_id,
-        closingName: r.closing_name,
         entryFeesPercent: r.entry_fees_percent == null ? null : Number(r.entry_fees_percent),
         entryFeesAmount: r.entry_fees_amount == null ? null : Number(r.entry_fees_amount),
         entryFeesAmountTotal:
           r.entry_fees_amount_total == null ? null : Number(r.entry_fees_amount_total),
-        entryFeesAssignedAmount:
-          r.entry_fees_assigned_amount == null ? null : Number(r.entry_fees_assigned_amount),
-        entryFeesAssignedAmountTotal:
-          r.entry_fees_assigned_amount_total == null
-            ? null
-            : Number(r.entry_fees_assigned_amount_total),
-        entryFeesAssignedOverridden: r.entry_fees_assigned_overridden,
-        entryFeesAssignedComment: r.entry_fees_assigned_comment ?? null,
         updatedBy: r.updated_by ?? null,
       }
     : null;

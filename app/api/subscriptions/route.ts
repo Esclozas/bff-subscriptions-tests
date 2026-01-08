@@ -56,10 +56,10 @@ export const runtime = 'nodejs';
 
 import { NextRequest, NextResponse } from 'next/server';
 import { upstream } from '@/lib/http';
-import { selectExtrasByOperationId } from '@/lib/db';
-import { flattenSubscription } from '@/lib/flatten';
+import { selectExtrasByOperationId } from '@/modules/subscriptions/db';
+import { flattenSubscription } from '@/modules/subscriptions/flatten';
 import { withCors, handleOptions } from '@/lib/cors';
-import { loadAllFlattenedSubscriptions } from '@/lib/subscriptions';
+import { loadAllFlattenedSubscriptions } from '@/modules/subscriptions/subscriptions';
 
 type SourceList = {
   content?: any[];
@@ -80,24 +80,30 @@ const TEXT_FILTER_FIELDS = [
   'productName',
   'teamName',
   'ownerFullName',
-  'closingName',
-  'entry_fees_assigned_manual_by',
-  'entry_fees_assigned_comment',
 ] as const;
+
 
 const NUMERIC_FILTER_FIELDS = [
   'amountValue',
   'entry_fees_percent',
   'entry_fees_amount',
   'entry_fees_amount_total',
-  'entry_fees_assigned_amount_total',
 ] as const;
 
 const BOOLEAN_FILTER_FIELDS = [
-  'teamInternal',
-  'ownerInternal',
-  'entry_fees_assigned_overridden',
+  'teamInternal',  'ownerInternal',
 ] as const;
+
+const SORTABLE_FIELDS = new Set([
+  ...TEXT_FILTER_FIELDS,
+  ...NUMERIC_FILTER_FIELDS,
+  ...BOOLEAN_FILTER_FIELDS,
+  'status',
+  'createdDate',
+  'updatedDate',
+  'signatureDate',
+  'validationDate',
+]);
 
 type TextField = (typeof TEXT_FILTER_FIELDS)[number];
 type NumericField = (typeof NUMERIC_FILTER_FIELDS)[number];
@@ -156,7 +162,8 @@ export async function GET(req: NextRequest) {
   const cookie = cookieHeaderFrom(req);
 
   const order = url.searchParams.get('order')?.toLowerCase() === 'asc' ? 'asc' : 'desc';
-  const sortField = url.searchParams.get('sort') ?? '';
+  const requestedSort = url.searchParams.get('sort') ?? '';
+  const sortField = SORTABLE_FIELDS.has(requestedSort) ? requestedSort : '';
   const sortParam = sortField ? `${sortField},${order}` : '';
 
   const limit = Math.min(Number(url.searchParams.get('limit') ?? '5000'), 5000);

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { withCors, handleOptions } from '@/lib/cors';
-import { loadAllFlattenedSubscriptions } from '@/lib/subscriptions';
+import { loadAllFlattenedSubscriptions } from '@/modules/subscriptions/subscriptions';
 
 export const runtime = 'nodejs';
 

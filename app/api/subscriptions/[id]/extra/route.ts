@@ -24,24 +24,16 @@ export const runtime = 'nodejs';
 
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
-import { upsertExtraByOperationId, deleteExtraByOperationId } from '@/lib/db';
+import { upsertExtraByOperationId, deleteExtraByOperationId } from '@/modules/subscriptions/db';
 import { withCors, handleOptions } from '@/lib/cors'; // 👈 AJOUT
 
 // Contrat d’entrée accepté par le BFF pour le PUT
 const BodySchema = z.object({
-  // Closing
-  closingId: z.string().uuid().nullable().optional(),
-  closingName: z.string().nullable().optional(),
 
   // Nouveau nommage aligné Neon (snake_case)
   entry_fees_percent: z.number().nullable().optional(),
   entry_fees_amount: z.number().nullable().optional(),
   entry_fees_amount_total: z.number().nullable().optional(),
-  entry_fees_assigned_amount: z.number().nullable().optional(),
-  entry_fees_assigned_amount_total: z.number().nullable().optional(),
-  entry_fees_assigned_overridden: z.boolean().nullable().optional(),
-  entry_fees_assigned_manual_by: z.string().nullable().optional(),
-  entry_fees_assigned_comment: z.string().nullable().optional(),
 
   // Ancien nommage (retro*)
   retroPercent: z.number().nullable().optional(),
@@ -118,9 +110,6 @@ export async function PUT(req: NextRequest, context: Ctx) {
 
     // 3) Normaliser vers le contrat attendu par lib/db.ts (camelCase)
     const payload = {
-      closingId: body.closingId ?? null,
-      closingName: body.closingName ?? null,
-
       entryFeesPercent:
         body.entry_fees_percent ??
         (body.retroPercent != null ? body.retroPercent : null),
@@ -131,14 +120,6 @@ export async function PUT(req: NextRequest, context: Ctx) {
 
       entryFeesAmountTotal: body.entry_fees_amount_total ?? null,
   
-      entryFeesAssignedAmount: body.entry_fees_assigned_amount ?? null,
-      entryFeesAssignedAmountTotal: body.entry_fees_assigned_amount_total ?? null,
-      entryFeesAssignedOverridden: body.entry_fees_assigned_overridden ?? null,
-
-      entryFeesAssignedManualBy: body.entry_fees_assigned_manual_by ?? null,
-      entryFeesAssignedComment:
-        body.entry_fees_assigned_comment ??
-        (body.comment != null ? body.comment : null),
     };
 
     // 4) Upsert côté Neon

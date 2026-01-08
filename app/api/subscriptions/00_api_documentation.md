@@ -233,7 +233,7 @@ DELETE :
 | entry_fees_assigned_amount_total | number     | Neon      | Montant total assigné                        |
 | entry_fees_assigned_overridden   | boolean    | Neon      | Override ?                                   |
 | entry_fees_assigned_manual_by    | string     | Neon      | Dernière modification par                    |
-| entry_fees_assigned_comment      | string     | Neon      | Commentaire interne                           |
+| entry_fees_assigned_comment      | string     | Neon      | Commentaire interne                          |
 
 
 
