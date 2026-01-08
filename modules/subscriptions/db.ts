@@ -21,8 +21,6 @@ export type Extra = {
   entryFeesPercent: number | null;
   entryFeesAmount: number | null;
   entryFeesAmountTotal: number | null;
-
-  updatedBy: string | null;
 };
 
 const TABLE = 'subscription_extra';
@@ -43,7 +41,6 @@ export async function selectExtrasByOperationId(operationIds: string[]) {
     entry_fees_amount: string | number | null;
     entry_fees_amount_total: string | number | null;
 
-    updated_by: string | null;
   };
 
   const rows = (await sql`
@@ -51,11 +48,11 @@ export async function selectExtrasByOperationId(operationIds: string[]) {
       operation_id,
       entry_fees_percent,
       entry_fees_amount,
-      entry_fees_amount_total,
-      updated_by
+      entry_fees_amount_total
     FROM ${sql.unsafe(TABLE)}
     WHERE operation_id = ANY(${arrayLiteral}::text[])
   `) as unknown as Row[];
+
 
   const map = new Map<string, Extra>();
   for (const r of rows) {
@@ -64,7 +61,6 @@ export async function selectExtrasByOperationId(operationIds: string[]) {
       entryFeesAmount: r.entry_fees_amount == null ? null : Number(r.entry_fees_amount),
       entryFeesAmountTotal:
         r.entry_fees_amount_total == null ? null : Number(r.entry_fees_amount_total),
-      updatedBy: r.updated_by ?? null,
     });
   }
   return map;
@@ -85,7 +81,6 @@ export async function upsertExtraByOperationId(
     entry_fees_percent: string | number | null;
     entry_fees_amount: string | number | null;
     entry_fees_amount_total: string | number | null;
-    updated_by: string | null;
   };
 
   const rows = (await sql`
@@ -93,41 +88,35 @@ export async function upsertExtraByOperationId(
       operation_id,
       entry_fees_percent,
       entry_fees_amount,
-      entry_fees_amount_total,
-      updated_by
+      entry_fees_amount_total
     )
     VALUES (
       ${operationId},
       ${body.entryFeesPercent ?? null},
       ${body.entryFeesAmount ?? null},
-      ${body.entryFeesAmountTotal ?? null},
+      ${body.entryFeesAmountTotal ?? null}
 
     )
     ON CONFLICT (operation_id) DO UPDATE SET
       entry_fees_percent = COALESCE(EXCLUDED.entry_fees_percent, ${sql.unsafe(TABLE)}.entry_fees_percent),
       entry_fees_amount = COALESCE(EXCLUDED.entry_fees_amount, ${sql.unsafe(TABLE)}.entry_fees_amount),
       entry_fees_amount_total = COALESCE(EXCLUDED.entry_fees_amount_total, ${sql.unsafe(TABLE)}.entry_fees_amount_total),
-      updated_by = COALESCE(EXCLUDED.updated_by, ${sql.unsafe(TABLE)}.updated_by),
       updated_at = NOW()
     RETURNING
-      closing_id,
-      closing_name,
       entry_fees_percent,
       entry_fees_amount,
-      entry_fees_amount_total,
-      updated_by
+      entry_fees_amount_total
   `) as unknown as UpsertRow[];
 
   const r = rows[0];
-  return r
-    ? {
-        entryFeesPercent: r.entry_fees_percent == null ? null : Number(r.entry_fees_percent),
-        entryFeesAmount: r.entry_fees_amount == null ? null : Number(r.entry_fees_amount),
-        entryFeesAmountTotal:
-          r.entry_fees_amount_total == null ? null : Number(r.entry_fees_amount_total),
-        updatedBy: r.updated_by ?? null,
-      }
-    : null;
+    return r
+      ? {
+          entryFeesPercent: r.entry_fees_percent == null ? null : Number(r.entry_fees_percent),
+          entryFeesAmount: r.entry_fees_amount == null ? null : Number(r.entry_fees_amount),
+          entryFeesAmountTotal:
+            r.entry_fees_amount_total == null ? null : Number(r.entry_fees_amount_total),
+        }
+      : null;
 }
 
 /** Suppression simple par operation_id */
