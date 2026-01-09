@@ -146,3 +146,27 @@ export async function deletePeriodById(periodId: string) {
 
   return rows[0]?.id ?? null; // null = not found
 }
+
+export async function updatePeriodById(
+  periodId: string,
+  body: { start_date: string; end_date: string }
+) {
+  const sql = getSql();
+
+  type Row = {
+    id: string;
+    start_date: string;
+    end_date: string;
+  };
+
+  const rows = (await sql`
+    UPDATE ${sql.unsafe(TABLE)}
+    SET
+      start_date = ${body.start_date}::date,
+      end_date   = ${body.end_date}::date
+    WHERE id = ${periodId}::uuid
+    RETURNING id, start_date::text, end_date::text
+  `) as unknown as Row[];
+
+  return rows[0] ?? null; // null = not found
+}
