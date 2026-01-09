@@ -134,3 +134,15 @@ export async function createPeriod(body: {
 
   return rows[0] ?? null;
 }
+
+export async function deletePeriodById(periodId: string) {
+  const sql = getSql();
+
+  const rows = (await sql`
+    DELETE FROM ${sql.unsafe(TABLE)}
+    WHERE id = ${periodId}::uuid
+    RETURNING id
+  `) as unknown as { id: string }[];
+
+  return rows[0]?.id ?? null; // null = not found
+}
