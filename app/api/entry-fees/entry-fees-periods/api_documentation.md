@@ -24,12 +24,15 @@ BASE="https://bff-subscriptions-tests.vercel.app"
 
 > ⚠️ Toutes les routes sont désormais **namespacées sous `/api/entry-fees`**
 
-| Méthode | Route                                                      | Description courte                               |
-| ------- | ---------------------------------------------------------- | ------------------------------------------------ |
+| Méthode | Route                                                      | Description courte |
+|---------|------------------------------------------------------------|---------------------|
 | GET     | /api/entry-fees/entry-fees-periods                         | Liste des périodes (filtres + pagination cursor) |
-| GET     | /api/entry-fees/entry-fees-periods/:periodId               | Lire une période par id                          |
-| GET     | /api/entry-fees/entry-fees-periods/resolve?date=YYYY-MM-DD | Résout la période contenant la date              |
-| POST    | /api/entry-fees/entry-fees-periods                         | Crée une période (DB refuse overlap)             |
+| GET     | /api/entry-fees/entry-fees-periods/:periodId               | Lire une période par id |
+| GET     | /api/entry-fees/entry-fees-periods/resolve?date=YYYY-MM-DD | Résout la période contenant la date |
+| POST    | /api/entry-fees/entry-fees-periods                         | Crée une période |
+| PUT     | /api/entry-fees/entry-fees-periods/:periodId               | Modifie une période (start/end, DB refuse overlap) |
+| DELETE  | /api/entry-fees/entry-fees-periods/:periodId               | Supprime une période |
+
 
 ---
 
@@ -191,4 +194,62 @@ Exemples :
 * Les overlaps et doublons exacts déclenchent une erreur SQLSTATE `23P01` → `409 Conflict`
 
 
+
+
+## 9) Supprimer une période
+
+```bash
+curl -si -X DELETE "$BASE/api/entry-fees/entry-fees-periods/PERIOD_ID"
+````
+
+* `204 No Content` → suppression OK
+* `404 Not Found` → période inexistante
+* `400 Bad Request` → `periodId` invalide
+
+
+---
+
+## 3️⃣ Compléter la section “Erreurs attendues”
+
+### 📍 Section **📌 Règles métier / Erreurs**
+
+Ajoute une ligne :
+
+```md
+- `204` : période supprimée avec succès
+````
+
+La liste devient :
+
+```md
+- `400` : dates invalides / `periodId` invalide
+- `404` : période inconnue / resolve sans match
+- `409` : overlap ou doublon exact
+- `204` : période supprimée avec succès
+```
+
+---
+
+## 4️⃣ (Optionnel mais pro) Ajouter une note métier
+
+### 📍 Section **📌 Règles métier**
+
+Ajoute ce paragraphe court :
+
+```md
+### Suppression d’une période
+
+La suppression est autorisée tant que la période n’est pas référencée par
+d’autres entités métier (payment lists, statements, exports).
+
+La suppression est **physique** (hard delete).
+```
+
+## X) Modifier une période (PUT)
+
+```bash
+curl -s -X PUT "$BASE/api/entry-fees/entry-fees-periods/PERIOD_ID" \
+  -H "Content-Type: application/json" \
+  -d '{"start_date":"2026-01-01","end_date":"2026-02-01"}' | jq .
+```
 

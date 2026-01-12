@@ -1,5 +1,4 @@
-
-# 🧱 Group Structures API — Documentation claire & opérationnelle
+# 🧱 Group Structures API — Documentation claire & opérationnelle (v2)
 
 ---
 
@@ -25,7 +24,7 @@
 
 ```bash
 # Local
-BASE="http://localhost:3000"
+BASE="http://localhost:3000"   # ou 3001 si le port est occupé
 
 # Prod (Vercel)
 BASE="https://bff-subscriptions-tests.vercel.app"
@@ -81,6 +80,11 @@ Retour :
 }
 ```
 
+📌 **Note**
+
+* `label` est **optionnel** (peut être `null`)
+* il est purement descriptif (debug / audit)
+
 ---
 
 ### 🔹 Version active (source de vérité)
@@ -104,13 +108,13 @@ GET /api/group-structures/:id
 
 ---
 
-### 🔹 Règles de regroupement (mapping)
+### 🔹 Règles de regroupement (mapping enrichi)
 
 ```http
 GET /api/group-structures/:id/map
 ```
 
-Retour :
+Retour **enrichi avec les noms des groupes** :
 
 ```json
 {
@@ -118,11 +122,29 @@ Retour :
   "mappings": [
     {
       "source_group_id": "uuid",
-      "billing_group_id": "uuid"
+      "billing_group_id": "uuid",
+
+      "source_group_name": "B4",
+      "billing_group_name": "B4Finance",
+
+      "source_group": {
+        "id": "uuid",
+        "name": "B4"
+      },
+      "billing_group": {
+        "id": "uuid",
+        "name": "B4Finance"
+      }
     }
   ]
 }
 ```
+
+📌 **Important**
+
+* les champs `*_group_name` et `*_group` sont **informatifs**
+* **seuls** `source_group_id` et `billing_group_id` sont persistés
+* lors d’un `POST`, **ne renvoyer que les UUIDs**
 
 ---
 
@@ -137,7 +159,7 @@ curl -s "$BASE/api/group-structures" | jq .
 # Version active
 curl -s "$BASE/api/group-structures/active" | jq .
 
-# Mapping actif
+# Mapping actif (enrichi)
 ACTIVE_ID=$(curl -s "$BASE/api/group-structures/active" | jq -r .id)
 curl -s "$BASE/api/group-structures/$ACTIVE_ID/map" | jq .
 ```
@@ -166,6 +188,7 @@ Règles :
 * ✔️ mapping **complet**
 * ✔️ `source_group_id` unique
 * ✔️ `activate=true` désactive l’ancienne
+* ✔️ `label` optionnel
 
 ---
 
@@ -206,6 +229,8 @@ curl -s "$BASE/api/group-structures/$ACTIVE_ID/map" | jq .
 
 #### Étape 3 — Modifier UNE règle et créer une nouvelle version
 
+⚠️ Le mapping retourné est **enrichi** → il faut **nettoyer** avant POST.
+
 ```bash
 curl -s "$BASE/api/group-structures/$ACTIVE_ID/map" \
 | jq --arg SOURCE "SOURCE_UUID" \
@@ -215,6 +240,7 @@ curl -s "$BASE/api/group-structures/$ACTIVE_ID/map" \
   activate: true,
   mappings: (
     .mappings
+    | map({ source_group_id, billing_group_id })
     | map(
         if .source_group_id == $SOURCE
         then .billing_group_id = $NEW_PARENT
@@ -246,7 +272,6 @@ curl -s "$BASE/api/group-structures/active" | jq .
 * crée une **nouvelle version**
 * l’active automatiquement
 
-
 ---
 
 ## 7️⃣ Règles d’or (à mettre en encadré)
@@ -256,16 +281,14 @@ curl -s "$BASE/api/group-structures/active" | jq .
 * ✅ Chaque changement = nouvelle version
 * ✅ Rollback toujours possible
 * ✅ Historique conservé
+* ✅ Les noms de groupes sont **en lecture seule**
 
 ---
 
 ## 🧠 Ce que tu gagnes avec cette structure
 
-* lecture **par intention** (“je veux faire quoi ?”)
-* commandes **immédiatement visibles**
-* séparation claire :
-
-  * concepts
-  * référence API
-  * recettes
-* doc utilisable **par un autre dev sans toi**
+* lecture **par intention**
+* versioning strict et sûr
+* mapping lisible **avec noms humains**
+* aucune dépendance DB aux noms
+* doc exploitable **par un autre dev sans toi**

@@ -112,11 +112,19 @@ export async function POST(req: NextRequest) {
     if (code === '23505') {
       return withCors(
         NextResponse.json(
-          { message: 'Conflict', detail: 'DB constraint conflict (unique violation).', code },
+          {
+            message: 'Conflict',
+            detail: 'DB constraint conflict (unique violation).',
+            code,
+            constraint: err?.constraint ?? null,
+            pg_detail: err?.detail ?? null,
+            pg_table: err?.table ?? null,
+          },
           { status: 409 },
         ),
       );
     }
+
 
     return withCors(
       NextResponse.json(
