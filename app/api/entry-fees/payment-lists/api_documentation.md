@@ -56,6 +56,8 @@ Ces APIs sont appelées **automatiquement côté backend** lors de la création 
 
 ⚠️ **Jamais appelées directement par l’UI pour créer un Payment List.**
 
+⚠️ **Créer un Payment List échoue en 409 si une souscription est déjà présente dans un statement dont le status n’est pas CANCELLED.**
+
 ---
 
 ## 📌 Routes principales (Entry Fees)
@@ -82,6 +84,7 @@ Ces APIs sont appelées **automatiquement côté backend** lors de la création 
 | `/payment-lists/summary` | Metadata + totaux + net | **UI principale** |
 
 👉 **Si l’UI affiche des montants → toujours `/summary`**
+
 
 ---
 

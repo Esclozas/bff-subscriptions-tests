@@ -112,7 +112,31 @@ export async function POST(req: NextRequest) {
       }));
     }
 
+
     const created = await withTx(async (client) => {
+
+      // 0) HARD RULE: une subscription ne peut être utilisée que si elle n'est pas déjà dans un statement NON annulé
+      const conflict = await client.query(
+        `
+        SELECT
+          ss.subscription_id,
+          s.entry_fees_payment_list_id,
+          s.id AS statement_id,
+          s.status
+        FROM public.entry_fees_statement_subscription ss
+        JOIN public.entry_fees_statement s
+          ON s.id = ss.entry_fees_statement_id
+        WHERE ss.subscription_id = ANY($1::uuid[])
+          AND s.status <> 'CANCELLED'
+        LIMIT 20
+        `,
+        [body.subscriptions],
+      );
+
+      if (conflict.rows.length > 0) {
+        throw new Error(`CONFLICT_SUB_ALREADY_ASSIGNED ${JSON.stringify(conflict.rows)}`);
+      }
+
     // 1) crée le payment list + subs + totals (dans la transaction)
     const pl = await createPaymentListAtomicTx(client, {
         created_by: body.created_by,
@@ -145,6 +169,19 @@ export async function POST(req: NextRequest) {
 
   } catch (err: any) {
     const msg = String(err?.message ?? err);
+
+    if (msg.startsWith('CONFLICT_SUB_ALREADY_ASSIGNED')) {
+      return withCors(
+        NextResponse.json(
+          {
+            message: 'Subscriptions already assigned to a non-cancelled statement',
+            detail: msg,
+          },
+          { status: 409 },
+        ),
+      );
+    }
+
 
     // ✅ Optionnel mais recommandé: mapper les erreurs "BAD_REQUEST_..." en 400
     if (msg.startsWith('BAD_REQUEST_')) {

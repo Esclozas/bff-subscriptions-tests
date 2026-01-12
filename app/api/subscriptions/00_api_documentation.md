@@ -1,142 +1,163 @@
-# API Subscriptions — Résumé ultra-concis
+# API Subscriptions — Résumé ultra-concis (à jour)
 
-# Tester local
+## Tester local
+
+```bash
 cd bff-subscriptions-tests
-npm run dev
+pnpm dev
+```
 
-# Local
-BASE="http://localhost:3000"
+## Local
 
-# Ou Vercel
+```bash
+BASE="http://localhost:3002"
+```
+
+## Vercel
+
+```bash
 BASE="https://bff-subscriptions-tests.vercel.app"
-
-
-
-
-# 📌 Routes
-
-| Méthode | Route                                | Description courte |
-|---------|--------------------------------------|---------------------|
-| GET     | /api/subscriptions                   | Liste aplatie (overview + Neon), pagination, filtres, tri |
-| GET     | /api/subscriptions/:id               | Détail aplati pour 1 subscription |
-| PUT     | /api/subscriptions/:id/extra         | Écrit/merge dans Neon (modifie les champs entry_fees_*, closing*) |
-| DELETE  | /api/subscriptions/:id/extra         | Supprime toutes les données Neon liées à la subscription |
+```
 
 ---
 
-# 📌 Pagination — Résumé ultra-concis
+## 📌 Routes
 
-| Valeur        | Sert à quoi ?                                    | Utilité concrète                            | Utilisé où ?                  |
-|---------------|--------------------------------------------------|---------------------------------------------|-------------------------------|
-| **limit**     | Nombre d’items renvoyés par l’API (max 250)      | Contrôle la taille d’une page UI            | UI ↔️ BFF                     |
-| **offset**    | Position de départ dans la liste finale          | Permet le scroll infini (page suivante)     | UI ↔️ BFF                     |
-| **PAGE_SIZE** | Taille des pages pour appeler developv4 (5000)   | Charge *toutes* les données sans timeout    | BFF → upstream (interne)      |
-
-
- 1) 📄 1º page (par défaut, sans rien) → `limit = 250` par défaut  → `offset = 0` (début de la liste)
-curl -s "$BASE/api/subscriptions" | jq .
-
- 2) 📄 1º page (explicitement) → Même résultat mais en le demandant soi-même
-curl -s "$BASE/api/subscriptions?limit=250&offset=0" | jq .
-
- 3) 📄 2º page → On saute les 250 premières lignes  → offset = 250
- → Exemple : curl -s "$BASE/api/subscriptions?limit=250&offset=250" | jq .
-
- 4) 📄 3º page → offset = 500 (2 × 250)
- → Exemple : curl -s "$BASE/api/subscriptions?limit=250&offset=500" | jq .
-
+| Méthode | Route                        | Description                                                            |
+| ------- | ---------------------------- | ---------------------------------------------------------------------- |
+| GET     | /api/subscriptions           | Liste aplatie (overview + Neon + Statements), pagination, filtres, tri |
+| GET     | /api/subscriptions/:id       | Détail aplati d’une souscription                                       |
+| PUT     | /api/subscriptions/:id/extra | Merge des champs Neon (entry_fees_*)                                   |
+| DELETE  | /api/subscriptions/:id/extra | Supprime les données Neon                                              |
+| POST    | /api/subscriptions/grid      | Vue groupée AG Grid (server-side)                                      |
 
 ---
 
+## 📌 Pagination
 
-## 📌 Filtres texte ("contains")
+| Paramètre | Description                        |
+| --------- | ---------------------------------- |
+| limit     | Nombre d’items renvoyés (max 5000) |
+| offset    | Décalage dans la liste finale      |
+
+Exemples :
+
+```bash
+curl -s "$BASE/api/subscriptions?limit=50&offset=0" | jq .
+curl -s "$BASE/api/subscriptions?limit=50&offset=50" | jq .
+```
+
+---
+
+## 📌 Filtres texte (contains, case-insensitive)
+
 Champs acceptés :
-- operationId  
-- partName  
-- investorType  
-- investorName  
-- investorFirstName  
-- productName  
-- teamName  
-- ownerName  
-- ownerFirstName  
-- closingName  
-- entry_fees_assigned_manual_by  
-- entry_fees_assigned_comment  
 
- → Exemple : curl -s "$BASE/api/subscriptions?closingName=clos" | jq .
+* operationId
+* amountCurrency
+* partName
+* investorType
+* investorName
+* investorFirstName
+* productName
+* teamName
+* ownerFullName
+* statement_number
+
+Exemple :
+
+```bash
+curl -s "$BASE/api/subscriptions?statement_number=PL-" | jq .
+```
+
+⚠️ Le filtre `statement_number` déclenche le **mode global**.
 
 ---
 
 ## 📌 Filtres numériques
-Champs numériques :
-- amountValue  
-- entry_fees_percent  
-- entry_fees_amount  
-- entry_fees_amount_total  
-- entry_fees_assigned_amount_total  
 
-Égalité :
-    ?amountValue=1000
+Champs :
 
- → Exemple : curl -s "$BASE/api/subscriptions?amountValue=5000" | jq .
+* amountValue
+* entry_fees_percent
+* entry_fees_amount
+* entry_fees_amount_total
 
-Intervalle :
-    ?amountValue_min=0&amountValue_max=40000
-
- → Exemple : curl -s "$BASE/api/subscriptions?entry_fees_amount_total_min=1000&entry_fees_amount_total_max=4000" | jq .
+```bash
+curl -s "$BASE/api/subscriptions?amountValue=5000" | jq .
+curl -s "$BASE/api/subscriptions?entry_fees_amount_total_min=1000&entry_fees_amount_total_max=4000" | jq .
+```
 
 ---
 
 ## 📌 Filtres booléens
-Champs acceptés :
-- teamInternal  
-- ownerInternal  
-- entry_fees_assigned_overridden  
 
- → Exemple : curl -s "$BASE/api/subscriptions?entry_fees_assigned_overridden=true" | jq .
+Champs :
+
+* teamInternal
+* ownerInternal
+* hasStatement (NOUVEAU)
+
+```bash
+# Avec statement actif
+curl -s "$BASE/api/subscriptions?hasStatement=true" | jq .
+
+# Sans statement
+curl -s "$BASE/api/subscriptions?hasStatement=false" | jq .
+```
 
 ---
 
 ## 📌 Tri
-    ?sort=amountValue&order=asc
-(order = asc | desc)
 
- → Exemple : curl -s "$BASE/api/subscriptions?sort=amountValue&order=asc&limit=50" | jq .
+```text
+?sort=<champ>&order=asc|desc
+```
 
----
-
-## 📌 Mode rapide / mode global
-- Pas de filtre global → 1 page upstream → rapide  
-- Filtre global (texte / numériques / booléens) → charge toutes les pages → plus lent  
-
- → Exemple (global mode) : curl -s "$BASE/api/subscriptions?ownerName=john" | jq .
+⚠️ `statement_number` **n’est pas triable** (ignoré volontairement).
 
 ---
 
-# 📌 PUT & DELETE Extra
+## 📌 Mode rapide vs mode global
 
-PUT (merge Neon) :
-    curl -s -X PUT "$BASE/api/subscriptions/ID/extra" \
-      -H "Content-Type: application/json" \
-      -d '{"entry_fees_amount_total":9999}' | jq .
-
-DELETE :
-    curl -si -X DELETE "$BASE/api/subscriptions/ID/extra"
+| Mode   | Quand                                  | Comportement                                          |
+| ------ | -------------------------------------- | ----------------------------------------------------- |
+| Rapide | Aucun filtre global                    | 1 page upstream, lookup Neon + Statements sur la page |
+| Global | Filtre texte / Neon / statement_number | Chargement complet + filtres locaux                   |
 
 ---
 
-# 📌 JSON aplati final (JSON)
+## 📌 Enrichissement Statements
 
+Chaque souscription est enrichie avec **un seul statement actif**.
+
+### Règle métier
+
+* priorité : `status != CANCELLED`
+* sinon : le plus récent (`created_at DESC`)
+
+### Champs ajoutés (toujours présents, nullable)
+
+| Champ                     | Type          | Description                        |
+| ------------------------- | ------------- | ---------------------------------- |
+| statement_id              | uuid | null   | ID du statement actif              |
+| statement_number          | string | null | Numéro du statement                |
+| statement_status          | enum | null   | TO_SEND / SENT / PAYED / CANCELLED |
+| statement_currency        | string | null | Devise                             |
+| statement_payment_list_id | uuid | null   | Payment list source                |
+
+---
+
+## 📌 JSON aplati (shape finale)
+
+```json
 {
   "subscriptionId": "string",
   "status": "string",
   "createdDate": "string",
   "updatedDate": "string",
-
   "signatureDate": "string",
   "validationDate": "string",
-
   "operationId": "string",
 
   "amountValue": 0,
@@ -152,7 +173,6 @@ DELETE :
   "investorType": "string",
   "investorName": "string",
   "investorFirstName": "string",
-  "investorFullName": "string",
 
   "productId": "string",
   "productName": "string",
@@ -166,123 +186,29 @@ DELETE :
   "ownerEmail": "string",
   "ownerInternal": false,
 
-  "closingId": "string",
-  "closingName": "string",
-
   "entry_fees_percent": 0,
   "entry_fees_amount": 0,
   "entry_fees_amount_total": 0,
-  "entry_fees_assigned_amount": 0,
-  "entry_fees_assigned_amount_total": 0,
-  "entry_fees_assigned_overridden": true,
-  "entry_fees_assigned_manual_by": "string",
-  "entry_fees_assigned_comment": "string"
-}
 
+  "statement_id": "string | null",
+  "statement_number": "string | null",
+  "statement_status": "TO_SEND | SENT | PAYED | CANCELLED | null",
+  "statement_currency": "string | null",
+  "statement_payment_list_id": "string | null"
+}
+```
 
 ---
 
-# 📌 JSON aplati final (JSON expliqué)
-
-| Champ                             | Type       | Origine   | Description courte                          |
-|----------------------------------|------------|-----------|----------------------------------------------|
-| subscriptionId                   | string     | upstream  | ID de la souscription                        |
-| status                           | string     | upstream  | Statut (DONE, AWAITING…)                    |
-| createdDate                      | string     | upstream  | Date création (ISO-8601)                     |
-| updatedDate                      | string     | upstream  | Date mise à jour (ISO-8601)                  |
-
-| signatureDate                    | string     | upstream  | Date de signature client                     |
-| validationDate                   | string     | upstream  | Date de validation interne                   |
-
-| operationId                      | string     | upstream  | Clé pour joindre Neon                        |
-
-| amountValue                      | number     | upstream  | Montant                                      |
-| amountCurrency                   | string     | upstream  | Devise (EUR, USD…)                           |
-
-| partId                           | string     | upstream  | ID de la part                                |
-| partName                         | string     | upstream  | Nom de la part                               |
-
-| fundId                           | string     | upstream  | ID du fonds                                   |
-| fundName                         | string     | upstream  | Nom du fonds                                  |
-
-| investorId                       | string     | upstream  | ID investisseur                              |
-| investorType                     | string     | upstream  | PERSON / COMPANY                             |
-| investorName                     | string     | upstream  | Nom                                          |
-| investorFirstName                | string     | upstream  | Prénom                                       |
-| investorFullName                 | string     | upstream  | Prénom + Nom                                 |
-
-| productId                        | string     | upstream  | ID produit                                   |
-| productName                      | string     | upstream  | Nom produit                                  |
-
-| teamId                           | string     | upstream  | ID équipe                                    |
-| teamName                         | string     | upstream  | Nom équipe                                   |
-| teamInternal                     | boolean    | upstream  | Interne ?                                    |
-
-| ownerId                          | string     | upstream  | ID du propriétaire                           |
-| ownerFullName                    | string     | upstream  | Prénom + Nom du propriétaire                 |
-| ownerEmail                       | string     | upstream  | Email du propriétaire                        |
-| ownerInternal                    | boolean    | upstream  | Interne ?                                    |
-
-| closingId                        | string     | Neon      | ID closing                                   |
-| closingName                      | string     | Neon      | Nom closing                                  |
-
-| entry_fees_percent               | number     | Neon      | % frais d’entrée                             |
-| entry_fees_amount                | number     | Neon      | Montant                                      |
-| entry_fees_amount_total          | number     | Neon      | Montant total                                |
-| entry_fees_assigned_amount       | number     | Neon      | Montant assigné                              |
-| entry_fees_assigned_amount_total | number     | Neon      | Montant total assigné                        |
-| entry_fees_assigned_overridden   | boolean    | Neon      | Override ?                                   |
-| entry_fees_assigned_manual_by    | string     | Neon      | Dernière modification par                    |
-| entry_fees_assigned_comment      | string     | Neon      | Commentaire interne                          |
-
-
-
-# -------------------------------------------------------------------------------------------
-
-
 ## 📌 Vue groupée AG Grid — POST /api/subscriptions/grid
-🔌 Body attendu
+
+```json
 {
   "startRow": 0,
   "endRow": 100,
-  "rowGroupCols": [
-    { "field": "fundId" },
-    { "field": "partId" },
-    { "field": "closingId" },
-    { "field": "teamId" },
-    { "field": "distributorId" },
-    { "field": "investorId" }
-  ],
+  "rowGroupCols": [{ "field": "fundId" }],
   "groupKeys": [],
-  "sortModel": [
-    { "colId": "createdDate", "sort": "desc" }
-  ],
+  "sortModel": [{ "colId": "createdDate", "sort": "desc" }],
   "filterModel": {}
 }
-
-📤 Réponse
-{
-  "rows": [],
-  "lastRow": 1234
-}
-
-📦 Exemples
-1) 📄 Flat mode via /grid
-curl -s -X POST "$BASE/api/subscriptions/grid" \
-  -H "Content-Type: application/json" \
-  -d '{"startRow":0,"endRow":20,"rowGroupCols":[],"groupKeys":[]}' | jq .
-
-2) 📄 Groupement niveau 0 (fonds)
-curl -s -X POST "$BASE/api/subscriptions/grid" \
-  -H "Content-Type: application/json" \
-  -d '{"startRow":0,"endRow":20,"rowGroupCols":[{"field":"fundId"}],"groupKeys":[]}' | jq .
-
-3) 📄 Groupe niveau 1 (parts d’un fonds)
-curl -s -X POST "$BASE/api/subscriptions/grid" \
-  -H "Content-Type: application/json" \
-  -d '{"startRow":0,"endRow":20,"rowGroupCols":[{"field":"fundId"},{"field":"partId"}],"groupKeys":["FUND-ID"]}' | jq .
-
-4) 📄 Mode B : équipe → distributeur → fonds → …
-curl -s -X POST "$BASE/api/subscriptions/grid" \
-  -H "Content-Type: application/json" \
-  -d '{"rowGroupCols":[{"field":"teamId"},{"field":"distributorId"},{"field":"fundId"}],"groupKeys":[]}' | jq .
+```
