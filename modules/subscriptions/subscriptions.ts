@@ -27,6 +27,7 @@
 import { selectExtrasByOperationId } from './db';
 import { flattenSubscription, type Flattened } from './flatten';
 import { upstream } from '../../lib/http';
+import { selectActiveStatementBySubscriptionIds } from './statements';
 
 
 type SourceList = {
@@ -111,10 +112,24 @@ export async function loadAllFlattenedSubscriptions(
     extras = await selectExtrasByOperationId(opIds);
   }
 
+  const subscriptionIds = full
+    .map((i) => i?.id ?? null)
+    .filter(Boolean) as string[];
+
+
+ // ✅ nouveau : lookup statement en 1 requête
+  const statementsBySubId = await selectActiveStatementBySubscriptionIds(subscriptionIds);
+
   const flattened = full.map((it) => {
     const opId = it?.operationId ?? it?.operation?.id ?? '';
-    return flattenSubscription(it, extras.get(opId) ?? null);
+    const subId = it?.id ?? '';
+    return flattenSubscription(
+      it,
+      extras.get(opId) ?? null,
+      statementsBySubId.get(subId) ?? null,
+    );
   });
+
 
     if (process.env.NODE_ENV !== 'production') {
     logInconsistentIdNamePairs(flattened);

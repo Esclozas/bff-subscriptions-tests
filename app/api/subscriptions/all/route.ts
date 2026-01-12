@@ -14,19 +14,35 @@ function cookieHeaderFrom(req: NextRequest) {
 }
 
 export async function GET(req: NextRequest) {
-  const cookie = cookieHeaderFrom(req);
+  try {
+    const cookie = cookieHeaderFrom(req);
+    const all = await loadAllFlattenedSubscriptions(cookie);
 
-  const all = await loadAllFlattenedSubscriptions(cookie);
+    return withCors(
+      NextResponse.json({
+        items: all,
+        total: all.length,
+        limit: all.length,
+        offset: 0,
+      }),
+    );
+  } catch (err: any) {
+    console.error('[api/subscriptions/all] error:', err);
 
-  return withCors(
-    NextResponse.json({
-      items: all,
-      total: all.length,
-      limit: all.length,
-      offset: 0,
-    }),
-  );
+    return withCors(
+      NextResponse.json(
+        {
+          error: 'Internal Server Error',
+          message: err?.message ?? String(err),
+          code: err?.code,
+          stack: err?.stack,
+        },
+        { status: 500 },
+      ),
+    );
+  }
 }
+
 
 export function OPTIONS(req: NextRequest) {
   return handleOptions(req);

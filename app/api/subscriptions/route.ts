@@ -60,6 +60,7 @@ import { selectExtrasByOperationId } from '@/modules/subscriptions/db';
 import { flattenSubscription } from '@/modules/subscriptions/flatten';
 import { withCors, handleOptions } from '@/lib/cors';
 import { loadAllFlattenedSubscriptions } from '@/modules/subscriptions/subscriptions';
+import { selectActiveStatementBySubscriptionIds } from '@/modules/subscriptions/statements';
 
 type SourceList = {
   content?: any[];
@@ -80,6 +81,7 @@ const TEXT_FILTER_FIELDS = [
   'productName',
   'teamName',
   'ownerFullName',
+  'statement_number',
 ] as const;
 
 
@@ -164,7 +166,8 @@ export async function GET(req: NextRequest) {
   const order = url.searchParams.get('order')?.toLowerCase() === 'asc' ? 'asc' : 'desc';
   const requestedSort = url.searchParams.get('sort') ?? '';
   const sortField = SORTABLE_FIELDS.has(requestedSort) ? requestedSort : '';
-  const sortParam = sortField ? `${sortField},${order}` : '';
+  const sortFieldSafe = sortField === 'statement_number' ? '' : sortField;
+  const sortParam = sortFieldSafe ? `${sortFieldSafe},${order}` : '';
 
   const limit = Math.min(Number(url.searchParams.get('limit') ?? '5000'), 5000);
   const offset = Math.max(Number(url.searchParams.get('offset') ?? '0'), 0);
@@ -247,14 +250,39 @@ export async function GET(req: NextRequest) {
       extras = await selectExtrasByOperationId(opIds);
     }
 
-    const flattened = items.map((it) => {
+    const subscriptionIds = items
+      .map((i) => i?.id ?? null)
+      .filter(Boolean) as string[];
+
+    // ✅ lookup statement en 1 requête sur la page visible
+    const statementsBySubId = subscriptionIds.length
+      ? await selectActiveStatementBySubscriptionIds(subscriptionIds)
+      : new Map();
+
+    let flattened = items.map((it) => {
       const opId = it?.operationId ?? it?.operation?.id ?? '';
-      return flattenSubscription(it, extras.get(opId) ?? null);
+      const subId = it?.id ?? '';
+      return flattenSubscription(
+        it,
+        extras.get(opId) ?? null,
+        statementsBySubId.get(subId) ?? null,
+      );
     });
 
-    const total = Number(
-      data.total ?? data.totalElements ?? flattened.length
-    );
+    // 🆕 Filtre hasStatement=true|false (sur la page visible)
+    const hasStatement = parseBooleanParam(url.searchParams.get('hasStatement'));
+    const hasStatementApplied = hasStatement !== null;
+
+    if (hasStatementApplied) {
+      flattened = flattened.filter((x: any) =>
+        hasStatement ? x.statement_id != null : x.statement_id == null
+      );
+    }
+      
+    const total = hasStatementApplied
+      ? flattened.length
+      : Number(data.total ?? data.totalElements ?? flattened.length);
+
 
     return withCors(
       NextResponse.json({
@@ -279,6 +307,15 @@ export async function GET(req: NextRequest) {
   if (statusFilter) {
     flattened = flattened.filter((x: any) => x.status === statusFilter);
   }
+
+  // 🆕 Filtre hasStatement=true|false (global)
+  const hasStatement = parseBooleanParam(url.searchParams.get('hasStatement'));
+  if (hasStatement !== null) {
+    flattened = flattened.filter((x: any) =>
+      hasStatement ? x.statement_id != null : x.statement_id == null
+    );
+  }
+
 
   // 2) Filtres texte (contains, case-insensitive)
   for (const field of TEXT_FILTER_FIELDS) {
@@ -331,10 +368,10 @@ export async function GET(req: NextRequest) {
   }
 
   // 5) Tri local
-  if (sortField) {
+  if (sortFieldSafe) {
     flattened.sort((a: any, b: any) => {
-      const va = (a as any)[sortField];
-      const vb = (b as any)[sortField];
+      const va = (a as any)[sortFieldSafe];
+      const vb = (b as any)[sortFieldSafe];
 
       if (va == null && vb == null) return 0;
       if (va == null) return order === 'asc' ? -1 : 1;
