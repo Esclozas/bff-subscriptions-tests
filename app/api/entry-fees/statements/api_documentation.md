@@ -30,6 +30,7 @@ BASE="http://localhost:3000"
 |     GET | /api/entry-fees/statements/:id               | Détail d’un statement                   |
 |     GET | /api/entry-fees/statements/:id/subscriptions | Lignes figées du statement              |
 |     GET | /api/entry-fees/statements/:id/summary       | Vue UI complète                         |
+|     GET | /api/entry-fees/subscriptions/:id/statements | Historique des statements d’une souscription |
 |   PATCH | /api/entry-fees/statements/:id               | Changement de statut uniquement         |
 |    POST | /api/entry-fees/statements/:id/cancel        | Annulation métier (transaction + event) |
 
@@ -115,6 +116,43 @@ Retour :
   "status": "TO_SEND",
   "currency": "EUR",
   "total_amount": "4000"
+}
+```
+
+---
+
+## 📌 Historique des statements d’une souscription
+
+### GET `/api/entry-fees/subscriptions/:id/statements`
+
+Retourne la **liste complète** des statements liés à une souscription, avec les
+infos du statement + la ligne snapshot correspondante.
+
+```bash
+curl -s "$BASE/api/entry-fees/subscriptions/{SUBSCRIPTION_ID}/statements" | jq .
+```
+
+Réponse :
+
+```json
+{
+  "subscription_id": "uuid",
+  "items": [
+    {
+      "statement_id": "uuid",
+      "statement_number": "PL-XXX",
+      "statement_status": "TO_SEND",
+      "statement_currency": "EUR",
+      "statement_payment_list_id": "uuid",
+      "statement_group_key": "string",
+      "statement_total_amount": "4000",
+      "statement_created_at": "2025-03-05T10:13:00.000Z",
+      "statement_subscription_id": "uuid",
+      "snapshot_source_group_id": "uuid",
+      "snapshot_total_amount": "500"
+    }
+  ],
+  "total": 1
 }
 ```
 

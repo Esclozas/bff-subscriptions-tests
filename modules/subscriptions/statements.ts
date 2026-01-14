@@ -17,6 +17,20 @@ export type StatementInfo = {
   statement_payment_list_id: string;
 };
 
+export type StatementHistoryItem = {
+  statement_id: string;
+  statement_number: string;
+  statement_status: StatementInfo['statement_status'];
+  statement_currency: string;
+  statement_payment_list_id: string;
+  statement_group_key: string;
+  statement_total_amount: string;
+  statement_created_at: string;
+  statement_subscription_id: string;
+  snapshot_source_group_id: string;
+  snapshot_total_amount: string;
+};
+
 function isUuid(v: string) {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(v);
 }
@@ -75,3 +89,32 @@ export async function selectActiveStatementBySubscriptionIds(subscriptionIds: st
 
   return map;
 }
+
+export async function listStatementsBySubscriptionId(subscriptionId: string) {
+  const sql = getSql();
+  if (!isUuid(subscriptionId)) return [];
+
+  type Row = StatementHistoryItem;
+
+  const rows = (await sql`
+    SELECT
+      s.id::text as statement_id,
+      s.statement_number,
+      s.status as statement_status,
+      s.currency as statement_currency,
+      s.entry_fees_payment_list_id::text as statement_payment_list_id,
+      s.group_key as statement_group_key,
+      s.total_amount::text as statement_total_amount,
+      s.created_at as statement_created_at,
+      ss.id::text as statement_subscription_id,
+      ss.snapshot_source_group_id::text as snapshot_source_group_id,
+      ss.snapshot_total_amount::text as snapshot_total_amount
+    FROM entry_fees_statement_subscription ss
+    JOIN entry_fees_statement s ON s.id = ss.entry_fees_statement_id
+    WHERE ss.subscription_id = ${subscriptionId}::uuid
+    ORDER BY s.created_at DESC, s.id DESC
+  `) as unknown as Row[];
+
+  return rows;
+}
+
