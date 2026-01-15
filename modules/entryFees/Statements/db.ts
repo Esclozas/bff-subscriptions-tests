@@ -1,5 +1,5 @@
 import { neon } from '@neondatabase/serverless';
-import type { StatementStatus } from './status';
+import type { IssueStatus, PaymentStatus } from './status';
 
 let _sql: ReturnType<typeof neon> | null = null;
 function getSql() {
@@ -20,7 +20,8 @@ export type StatementRow = {
   entry_fees_payment_list_id: string;
   group_key: string;
   statement_number: string;
-  status: StatementStatus;
+  issue_status: IssueStatus;
+  payment_status: PaymentStatus;
   currency: string;
   total_amount: string | number;
   created_at: string;
@@ -45,7 +46,8 @@ export function decodeCursor(cursor: string) {
 /** LIST statements avec filtres + pagination limit/cursor (order: created_at desc, id desc) */
 export async function listStatements(args: {
   paymentListId?: string | null;
-  status?: StatementStatus | null;
+  issueStatus?: IssueStatus | null;
+  paymentStatus?: PaymentStatus | null;
   currency?: string | null;
   groupKey?: string | null;
   limit: number;
@@ -66,7 +68,8 @@ export async function listStatements(args: {
   const whereFilters = sql`
     WHERE 1=1
       ${args.paymentListId ? sql`AND entry_fees_payment_list_id = ${args.paymentListId}::uuid` : sql``}
-      ${args.status ? sql`AND status = ${args.status}::entry_fees_statement_status_enum` : sql``}
+      ${args.issueStatus ? sql`AND issue_status = ${args.issueStatus}::entry_fees_statement_issue_status_enum` : sql``}
+      ${args.paymentStatus ? sql`AND payment_status = ${args.paymentStatus}::entry_fees_statement_payment_status_enum` : sql``}
       ${args.currency ? sql`AND currency = ${args.currency}` : sql``}
       ${args.groupKey ? sql`AND group_key = ${args.groupKey}` : sql``}
   `;
@@ -87,7 +90,8 @@ export async function listStatements(args: {
       entry_fees_payment_list_id,
       group_key,
       statement_number,
-      status,
+      issue_status,
+      payment_status,
       currency,
       total_amount,
       created_at
@@ -120,7 +124,8 @@ export async function getStatement(statementId: string) {
       entry_fees_payment_list_id,
       group_key,
       statement_number,
-      status,
+      issue_status,
+      payment_status,
       currency,
       total_amount,
       created_at
@@ -150,19 +155,20 @@ export async function getStatementLines(statementId: string) {
   return rows;
 }
 
-/** PATCH status uniquement */
-export async function updateStatementStatus(statementId: string, newStatus: StatementStatus) {
+/** PATCH payment_status uniquement */
+export async function updateStatementPaymentStatus(statementId: string, newStatus: PaymentStatus) {
   const sql = getSql();
   const rows = (await sql`
     UPDATE ${sql.unsafe(T_STATEMENT)}
-    SET status = ${newStatus}::entry_fees_statement_status_enum
+    SET payment_status = ${newStatus}::entry_fees_statement_payment_status_enum
     WHERE id = ${statementId}::uuid
     RETURNING
       id,
       entry_fees_payment_list_id,
       group_key,
       statement_number,
-      status,
+      issue_status,
+      payment_status,
       currency,
       total_amount,
       created_at
@@ -174,7 +180,7 @@ export async function updateStatementStatus(statementId: string, newStatus: Stat
  * CANCEL = transaction:
  *  - lock statement row
  *  - if already CANCELLED => conflict
- *  - update status=CANCELLED
+ *  - update issue_status=CANCELLED
  *  - insert event delta négatif sur payment list
  *
  * ⚠️ IMPORTANT: la table event n’est pas décrite ici.
@@ -192,7 +198,8 @@ export async function cancelStatementWithEvent(statementId: string, reason?: str
         entry_fees_payment_list_id,
         group_key,
         statement_number,
-        status,
+        issue_status,
+        payment_status,
         currency,
         total_amount,
         created_at
@@ -205,18 +212,19 @@ export async function cancelStatementWithEvent(statementId: string, reason?: str
     const s = sRows[0] ?? null;
     if (!s) return { kind: 'NOT_FOUND' as const };
 
-    if (s.status === 'CANCELLED') return { kind: 'ALREADY_CANCELLED' as const };
+    if (s.issue_status === 'CANCELLED') return { kind: 'ALREADY_CANCELLED' as const };
 
     const updatedRows = (await tx`
       UPDATE ${tx.unsafe(T_STATEMENT)}
-      SET status = 'CANCELLED'::entry_fees_statement_status_enum
+      SET issue_status = 'CANCELLED'::entry_fees_statement_issue_status_enum
       WHERE id = ${statementId}::uuid
       RETURNING
         id,
         entry_fees_payment_list_id,
         group_key,
         statement_number,
-        status,
+        issue_status,
+        payment_status,
         currency,
         total_amount,
         created_at

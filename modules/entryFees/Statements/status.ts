@@ -1,17 +1,21 @@
-export type StatementStatus = 'TO_SEND' | 'SENT' | 'PAYED' | 'CANCELLED';
+export type IssueStatus = 'ISSUED' | 'CANCELLED';
+export type PaymentStatus = 'UNPAID' | 'PAID';
 
-const ALLOWED: Record<StatementStatus, StatementStatus[]> = {
-  TO_SEND: ['SENT', 'CANCELLED'],
-  SENT: ['PAYED', 'CANCELLED'],
-  PAYED: [], // en général interdit -> si refund, autre mécanisme
-  CANCELLED: [],
+const PAYMENT_ALLOWED: Record<PaymentStatus, PaymentStatus[]> = {
+  UNPAID: ['PAID'],
+  PAID: [],
 };
 
-export function assertValidStatus(input: unknown): StatementStatus | null {
-  if (input === 'TO_SEND' || input === 'SENT' || input === 'PAYED' || input === 'CANCELLED') return input;
+export function assertValidIssueStatus(input: unknown): IssueStatus | null {
+  if (input === 'ISSUED' || input === 'CANCELLED') return input;
   return null;
 }
 
-export function canTransition(from: StatementStatus, to: StatementStatus) {
-  return (ALLOWED[from] ?? []).includes(to);
+export function assertValidPaymentStatus(input: unknown): PaymentStatus | null {
+  if (input === 'UNPAID' || input === 'PAID') return input;
+  return null;
+}
+
+export function canTransitionPaymentStatus(from: PaymentStatus, to: PaymentStatus) {
+  return (PAYMENT_ALLOWED[from] ?? []).includes(to);
 }

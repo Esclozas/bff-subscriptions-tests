@@ -133,7 +133,7 @@ Chaque souscription est enrichie avec **un seul statement actif**.
 
 ### Règle métier
 
-* priorité : `status != CANCELLED`
+* priorité : `issue_status != CANCELLED`
 * sinon : le plus récent (`created_at DESC`)
 
 ### Champs ajoutés (toujours présents, nullable)
@@ -142,7 +142,8 @@ Chaque souscription est enrichie avec **un seul statement actif**.
 | ------------------------- | ------------- | ---------------------------------- |
 | statement_id              | uuid | null   | ID du statement actif              |
 | statement_number          | string | null | Numéro du statement                |
-| statement_status          | enum | null   | TO_SEND / SENT / PAYED / CANCELLED |
+| statement_issue_status    | enum | null   | ISSUED / CANCELLED                 |
+| statement_payment_status  | enum | null   | UNPAID / PAID                       |
 | statement_currency        | string | null | Devise                             |
 | statement_payment_list_id | uuid | null   | Payment list source                |
 
@@ -192,7 +193,8 @@ Chaque souscription est enrichie avec **un seul statement actif**.
 
   "statement_id": "string | null",
   "statement_number": "string | null",
-  "statement_status": "TO_SEND | SENT | PAYED | CANCELLED | null",
+  "statement_issue_status": "ISSUED | CANCELLED | null",
+  "statement_payment_status": "UNPAID | PAID | null",
   "statement_currency": "string | null",
   "statement_payment_list_id": "string | null"
 }

@@ -4,11 +4,12 @@ import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { withCors, handleOptions } from '@/lib/cors';
 import { listStatements } from '@/modules/entryFees/Statements/db';
-import { assertValidStatus } from '@/modules/entryFees/Statements/status';
+import { assertValidIssueStatus, assertValidPaymentStatus } from '@/modules/entryFees/Statements/status';
 
 const QuerySchema = z.object({
   payment_list_id: z.string().uuid().optional(),
-  status: z.string().optional(),
+  issue_status: z.string().optional(),
+  payment_status: z.string().optional(),
   currency: z.string().optional(),
   billing_group_id: z.string().optional(), // tu l'appelles group_key en DB
   limit: z.string().optional(),
@@ -25,21 +26,27 @@ export async function GET(req: NextRequest) {
   const q = parsed.data;
   const limit = Math.min(Math.max(Number(q.limit ?? '50'), 1), 200);
 
-  const status = q.status ? assertValidStatus(q.status) : null;
-  if (q.status && !status) {
-    return withCors(NextResponse.json({ message: 'Invalid status filter' }, { status: 400 }));
+  const issueStatus = q.issue_status ? assertValidIssueStatus(q.issue_status) : null;
+  if (q.issue_status && !issueStatus) {
+    return withCors(NextResponse.json({ message: 'Invalid issue_status filter' }, { status: 400 }));
   }
 
-    const { items, total, nextCursor } = await listStatements({
+  const paymentStatus = q.payment_status ? assertValidPaymentStatus(q.payment_status) : null;
+  if (q.payment_status && !paymentStatus) {
+    return withCors(NextResponse.json({ message: 'Invalid payment_status filter' }, { status: 400 }));
+  }
+
+  const { items, total, nextCursor } = await listStatements({
     paymentListId: q.payment_list_id ?? null,
-    status,
+    issueStatus,
+    paymentStatus,
     currency: q.currency ?? null,
     groupKey: q.billing_group_id ?? null,
     limit,
     cursor: q.cursor ?? null,
-    });
+  });
 
-    return withCors(NextResponse.json({ items, total, nextCursor, limit }));
+  return withCors(NextResponse.json({ items, total, nextCursor, limit }));
 
 }
 

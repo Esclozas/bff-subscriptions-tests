@@ -62,7 +62,8 @@ export type Flattened = {
   // Statement enrichi (toujours présent côté UI mais null si absent)
   statement_id: string | null;
   statement_number: string | null;
-  statement_status: 'TO_SEND' | 'SENT' | 'PAYED' | 'CANCELLED' | null;
+  statement_issue_status: 'ISSUED' | 'CANCELLED' | null;
+  statement_payment_status: 'UNPAID' | 'PAID' | null;
   statement_currency: string | null;
   statement_payment_list_id: string | null;
 };
@@ -147,7 +148,8 @@ export function flattenSubscription(
 
     statement_id: statement?.statement_id ?? null,
     statement_number: statement?.statement_number ?? null,
-    statement_status: statement?.statement_status ?? null,
+    statement_issue_status: statement?.statement_issue_status ?? null,
+    statement_payment_status: statement?.statement_payment_status ?? null,
     statement_currency: statement?.statement_currency ?? null,
     statement_payment_list_id: statement?.statement_payment_list_id ?? null,
   };

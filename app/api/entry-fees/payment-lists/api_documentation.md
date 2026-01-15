@@ -56,7 +56,7 @@ Ces APIs sont appelées **automatiquement côté backend** lors de la création 
 
 ⚠️ **Jamais appelées directement par l’UI pour créer un Payment List.**
 
-⚠️ **Créer un Payment List échoue en 409 si une souscription est déjà présente dans un statement dont le status n’est pas CANCELLED.**
+⚠️ **Créer un Payment List échoue en 409 si une souscription est déjà présente dans un statement dont le issue_status n’est pas CANCELLED.**
 
 ---
 

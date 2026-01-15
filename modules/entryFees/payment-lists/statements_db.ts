@@ -138,7 +138,8 @@ export async function listStatementsByPaymentListId(paymentListId: string) {
       entry_fees_payment_list_id,
       group_key,
       statement_number,
-      status,
+      issue_status,
+      payment_status,
       currency,
       total_amount::text AS total_amount,
       created_at

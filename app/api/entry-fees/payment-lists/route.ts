@@ -122,12 +122,12 @@ export async function POST(req: NextRequest) {
           ss.subscription_id,
           s.entry_fees_payment_list_id,
           s.id AS statement_id,
-          s.status
+          s.issue_status
         FROM public.entry_fees_statement_subscription ss
         JOIN public.entry_fees_statement s
           ON s.id = ss.entry_fees_statement_id
         WHERE ss.subscription_id = ANY($1::uuid[])
-          AND s.status <> 'CANCELLED'
+          AND s.issue_status <> 'CANCELLED'
         LIMIT 20
         `,
         [body.subscriptions],

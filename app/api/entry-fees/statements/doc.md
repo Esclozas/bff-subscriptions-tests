@@ -16,9 +16,9 @@ Cette API respecte un modèle **snapshot + historique immuable**, adapté aux ob
 - Un **statement est un document financier figé**
 - Les **lignes (subscriptions)** sont des snapshots et **ne changent jamais**
 - Les montants **ne sont jamais recalculés**
-- La seule mutation autorisée est le **changement de statut**
+- La seule mutation autorisée est le **changement de payment_status**
 - L’annulation est une **action métier transactionnelle** (avec impact payment list)
-- Aucun DELETE : on annule via `status = CANCELLED`
+- Aucun DELETE : on annule via `issue_status = CANCELLED`
 
 ---
 
@@ -32,7 +32,8 @@ Cette API respecte un modèle **snapshot + historique immuable**, adapté aux ob
 | `entry_fees_payment_list_id` | Payment list associée |
 | `group_key` | Billing group |
 | `statement_number` | Numéro unique du document |
-| `status` | `TO_SEND`, `SENT`, `PAYED`, `CANCELLED` |
+| `issue_status` | `ISSUED`, `CANCELLED` |
+| `payment_status` | `UNPAID`, `PAID` |
 | `currency` | Devise |
 | `total_amount` | Montant total figé |
 | `created_at` | Date de création |
@@ -80,7 +81,8 @@ Retourne une liste paginée par **cursor**, avec **total global**.
 | Param | Type | Description |
 |-----|------|-------------|
 | `payment_list_id` | uuid | Filtre par payment list |
-| `status` | string | `TO_SEND`, `SENT`, `PAYED`, `CANCELLED` |
+| `issue_status` | string | `ISSUED`, `CANCELLED` |
+| `payment_status` | string | `UNPAID`, `PAID` |
 | `currency` | string | Ex: `EUR` |
 | `billing_group_id` | string | Correspond à `group_key` |
 | `limit` | number | Max 200 (défaut 50) |
@@ -96,7 +98,8 @@ Retourne une liste paginée par **cursor**, avec **total global**.
       "entry_fees_payment_list_id": "uuid",
       "group_key": "string",
       "statement_number": "FR002",
-      "status": "TO_SEND",
+      "issue_status": "ISSUED",
+      "payment_status": "UNPAID",
       "currency": "EUR",
       "total_amount": "4000",
       "created_at": "2025-03-05T10:13:00.000Z"
@@ -122,7 +125,8 @@ Retourne le document financier figé.
 {
   "id": "uuid",
   "statement_number": "FR002",
-  "status": "TO_SEND",
+  "issue_status": "ISSUED",
+  "payment_status": "UNPAID",
   "currency": "EUR",
   "total_amount": "4000",
   "created_at": "2025-03-05T10:13:00.000Z"
@@ -184,34 +188,30 @@ Agrégation pratique pour l’UI (sans recalcul métier).
 
 ---
 
-## 5. Modifier le statut d’un statement
+## 5. Modifier le payment_status d’un statement
 
 ### `PATCH /api/entry-fees/statements/{statementId}`
 
-👉 **Seul champ modifiable : `status`**
+👉 **Seul champ modifiable : `payment_status`**
 
 #### Body
 
 ```json
 {
-  "status": "SENT"
+  "payment_status": "PAID"
 }
 ```
 
 #### Transitions autorisées
 
-| From        | To                    |
-| ----------- | --------------------- |
-| `TO_SEND`   | `SENT`, `CANCELLED`*  |
-| `SENT`      | `PAYED`, `CANCELLED`* |
-| `PAYED`     | ❌                     |
-| `CANCELLED` | ❌                     |
-
-* `CANCELLED` **interdit via PATCH** → utiliser `/cancel`.
+| From     | To   |
+| -------- | ---- |
+| `UNPAID` | `PAID` |
+| `PAID`   | ❌   |
 
 #### Erreurs
 
-* `400` : statut invalide ou transition interdite
+* `400` : payment_status invalide ou transition interdite
 * `404` : statement inconnu
 
 ---
@@ -225,7 +225,8 @@ Annule définitivement un statement.
 ### Règles
 
 * Transaction DB obligatoire
-* `status` → `CANCELLED`
+* `issue_status` → `CANCELLED`
+* `payment_status` inchangé
 * Création d’un **event négatif** sur la payment list
 * Anti double-annulation
 

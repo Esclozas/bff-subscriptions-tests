@@ -12,7 +12,8 @@ function getSql() {
 export type StatementInfo = {
   statement_id: string;
   statement_number: string;
-  statement_status: 'TO_SEND' | 'SENT' | 'PAYED' | 'CANCELLED';
+  statement_issue_status: 'ISSUED' | 'CANCELLED';
+  statement_payment_status: 'UNPAID' | 'PAID';
   statement_currency: string;
   statement_payment_list_id: string;
 };
@@ -20,7 +21,8 @@ export type StatementInfo = {
 export type StatementHistoryItem = {
   statement_id: string;
   statement_number: string;
-  statement_status: StatementInfo['statement_status'];
+  statement_issue_status: StatementInfo['statement_issue_status'];
+  statement_payment_status: StatementInfo['statement_payment_status'];
   statement_currency: string;
   statement_payment_list_id: string;
   statement_group_key: string;
@@ -37,7 +39,7 @@ function isUuid(v: string) {
 
 /**
  * 1 statement "actif" par subscription_id :
- * - priorité status != CANCELLED
+ * - priorité issue_status != CANCELLED
  * - puis plus récent (created_at desc)
  */
 export async function selectActiveStatementBySubscriptionIds(subscriptionIds: string[]) {
@@ -54,7 +56,8 @@ export async function selectActiveStatementBySubscriptionIds(subscriptionIds: st
     subscription_id: string;
     statement_id: string;
     statement_number: string;
-    statement_status: StatementInfo['statement_status'];
+    statement_issue_status: StatementInfo['statement_issue_status'];
+    statement_payment_status: StatementInfo['statement_payment_status'];
     statement_currency: string;
     statement_payment_list_id: string;
   };
@@ -64,7 +67,8 @@ export async function selectActiveStatementBySubscriptionIds(subscriptionIds: st
       ss.subscription_id::text as subscription_id,
       s.id::text as statement_id,
       s.statement_number,
-      s.status as statement_status,
+      s.issue_status as statement_issue_status,
+      s.payment_status as statement_payment_status,
       s.currency as statement_currency,
       s.entry_fees_payment_list_id::text as statement_payment_list_id
     FROM entry_fees_statement_subscription ss
@@ -72,7 +76,7 @@ export async function selectActiveStatementBySubscriptionIds(subscriptionIds: st
     WHERE ss.subscription_id = ANY(${arrayLiteral}::uuid[])
     ORDER BY
       ss.subscription_id,
-      (s.status = 'CANCELLED') ASC,
+      (s.issue_status = 'CANCELLED') ASC,
       s.created_at DESC
   `) as unknown as Row[];
 
@@ -81,7 +85,8 @@ export async function selectActiveStatementBySubscriptionIds(subscriptionIds: st
     map.set(r.subscription_id, {
       statement_id: r.statement_id,
       statement_number: r.statement_number,
-      statement_status: r.statement_status,
+      statement_issue_status: r.statement_issue_status,
+      statement_payment_status: r.statement_payment_status,
       statement_currency: r.statement_currency,
       statement_payment_list_id: r.statement_payment_list_id,
     });
@@ -100,7 +105,8 @@ export async function listStatementsBySubscriptionId(subscriptionId: string) {
     SELECT
       s.id::text as statement_id,
       s.statement_number,
-      s.status as statement_status,
+      s.issue_status as statement_issue_status,
+      s.payment_status as statement_payment_status,
       s.currency as statement_currency,
       s.entry_fees_payment_list_id::text as statement_payment_list_id,
       s.group_key as statement_group_key,
@@ -117,4 +123,3 @@ export async function listStatementsBySubscriptionId(subscriptionId: string) {
 
   return rows;
 }
-

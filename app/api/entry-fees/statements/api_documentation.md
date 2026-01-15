@@ -31,7 +31,7 @@ BASE="http://localhost:3000"
 |     GET | /api/entry-fees/statements/:id/subscriptions | Lignes figées du statement              |
 |     GET | /api/entry-fees/statements/:id/summary       | Vue UI complète                         |
 |     GET | /api/entry-fees/subscriptions/:id/statements | Historique des statements d’une souscription |
-|   PATCH | /api/entry-fees/statements/:id               | Changement de statut uniquement         |
+|   PATCH | /api/entry-fees/statements/:id               | Changement de payment_status uniquement |
 |    POST | /api/entry-fees/statements/:id/cancel        | Annulation métier (transaction + event) |
 
 ---
@@ -41,7 +41,7 @@ BASE="http://localhost:3000"
 * ✅ Statement = **document financier figé**
 * ❌ Aucun recalcul des montants
 * ❌ Aucune modification des lignes
-* ✅ Seul champ modifiable : `status`
+* ✅ Seul champ modifiable : `payment_status`
 * ❌ Pas de DELETE → on annule via `/cancel`
 * ✅ Annulation = **event négatif sur payment list**
 
@@ -78,12 +78,13 @@ curl -s "$BASE/api/entry-fees/statements?limit=2&cursor=XXX" | jq .
 Filtres possibles :
 
 * `payment_list_id`
-* `status`
+* `issue_status`
+* `payment_status`
 * `currency`
 * `billing_group_id`
 
 ```bash
-curl -s "$BASE/api/entry-fees/statements?status=TO_SEND&currency=EUR" | jq .
+curl -s "$BASE/api/entry-fees/statements?issue_status=ISSUED&currency=EUR" | jq .
 ```
 
 Réponse :
@@ -113,7 +114,8 @@ Retour :
 {
   "id": "uuid",
   "statement_number": "FR002",
-  "status": "TO_SEND",
+  "issue_status": "ISSUED",
+  "payment_status": "UNPAID",
   "currency": "EUR",
   "total_amount": "4000"
 }
@@ -141,7 +143,8 @@ Réponse :
     {
       "statement_id": "uuid",
       "statement_number": "PL-XXX",
-      "statement_status": "TO_SEND",
+      "statement_issue_status": "ISSUED",
+      "statement_payment_status": "UNPAID",
       "statement_currency": "EUR",
       "statement_payment_list_id": "uuid",
       "statement_group_key": "string",
@@ -208,26 +211,24 @@ Retour :
 
 ---
 
-## 📌 Changer le statut
+## 📌 Changer le payment_status
 
 ### PATCH `/api/entry-fees/statements/:id`
 
-👉 **Seul champ modifiable : `status`**
+👉 **Seul champ modifiable : `payment_status`**
 
 ```bash
 curl -s -X PATCH "$BASE/api/entry-fees/statements/{STATEMENT_ID}" \
   -H "Content-Type: application/json" \
-  -d '{"status":"SENT"}' | jq .
+  -d '{"payment_status":"PAID"}' | jq .
 ```
 
 ### Transitions autorisées
 
-| From           | To                      |
-| -------------- | ----------------------- |
-| TO_SEND        | SENT                    |
-| SENT           | PAYED                   |
-| TO_SEND / SENT | ❌ CANCELLED (via PATCH) |
-| PAYED          | ❌                       |
+| From   | To   |
+| ------ | ---- |
+| UNPAID | PAID |
+| PAID   | ❌   |
 
 ---
 
@@ -243,7 +244,8 @@ curl -s -X POST "$BASE/api/entry-fees/statements/{STATEMENT_ID}/cancel" \
 
 Effets :
 
-* `status` → `CANCELLED`
+* `issue_status` → `CANCELLED`
+* `payment_status` inchangé
 * création d’un **event négatif** sur la payment list
 * transaction DB atomique
 * anti double-annulation
