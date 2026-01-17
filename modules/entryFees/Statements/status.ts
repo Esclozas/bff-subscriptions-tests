@@ -3,7 +3,7 @@ export type PaymentStatus = 'UNPAID' | 'PAID';
 
 const PAYMENT_ALLOWED: Record<PaymentStatus, PaymentStatus[]> = {
   UNPAID: ['PAID'],
-  PAID: [],
+  PAID: ['UNPAID'],
 };
 
 export function assertValidIssueStatus(input: unknown): IssueStatus | null {

@@ -1,5 +1,5 @@
 // modules/entry-fees/db.ts
-import { neon } from '@neondatabase/serverless';
+import { neon, Pool } from '@neondatabase/serverless';
 
 let _sql: ReturnType<typeof neon> | null = null;
 function getSql() {
@@ -10,6 +10,15 @@ function getSql() {
   return _sql;
 }
 
+let _pool: Pool | null = null;
+function getPool() {
+  if (_pool) return _pool;
+  const url = process.env.NEON_DATABASE_URL;
+  if (!url) throw new Error('NEON_DATABASE_URL is not set');
+  _pool = new Pool({ connectionString: url });
+  return _pool;
+}
+
 const TABLE = 'entry_fees_period';
 
 export type EntryFeesPeriod = {
@@ -18,6 +27,36 @@ export type EntryFeesPeriod = {
   end_date: string;   // YYYY-MM-DD (exclusif)
   created_by?: string | null; // si tu ajoutes la colonne plus tard
 };
+
+export type EntryFeesPeriodBatchCreate = {
+  start_date: string;
+  end_date: string;
+};
+
+export type EntryFeesPeriodBatchUpdate = {
+  id: string;
+  start_date: string;
+  end_date: string;
+};
+
+export type EntryFeesPeriodBatchDelete = {
+  id: string;
+};
+
+export type EntryFeesPeriodBatchInput = {
+  create: EntryFeesPeriodBatchCreate[];
+  update: EntryFeesPeriodBatchUpdate[];
+  delete: EntryFeesPeriodBatchDelete[];
+};
+
+export type EntryFeesPeriodBatchResult = {
+  create: EntryFeesPeriod[];
+  update: EntryFeesPeriod[];
+  delete: string[];
+};
+
+export type EntryFeesPeriodBatchOp = 'create' | 'update' | 'delete';
+export type EntryFeesPeriodBatchContext = { op: EntryFeesPeriodBatchOp; index: number };
 
 type PeriodRow = {
   id: string;
@@ -169,4 +208,96 @@ export async function updatePeriodById(
   `) as unknown as Row[];
 
   return rows[0] ?? null; // null = not found
+}
+
+function attachBatchContext(err: any, ctx: EntryFeesPeriodBatchContext) {
+  return Object.assign(err, { _batch: ctx });
+}
+
+export async function applyEntryFeesPeriodBatch(
+  input: EntryFeesPeriodBatchInput,
+  options?: { dryRun?: boolean },
+): Promise<EntryFeesPeriodBatchResult> {
+  const createItems = input.create ?? [];
+  const updateItems = input.update ?? [];
+  const deleteItems = input.delete ?? [];
+
+  if (!createItems.length && !updateItems.length && !deleteItems.length) {
+    return { create: [], update: [], delete: [] };
+  }
+
+  const pool = getPool();
+  const client = await pool.connect();
+  const results: EntryFeesPeriodBatchResult = { create: [], update: [], delete: [] };
+
+  try {
+    await client.query('BEGIN');
+
+    for (let i = 0; i < deleteItems.length; i += 1) {
+      const item = deleteItems[i];
+      try {
+        const res = await client.query<{ id: string }>(
+          `DELETE FROM ${TABLE} WHERE id = $1::uuid RETURNING id`,
+          [item.id],
+        );
+        if (res.rows[0]?.id) {
+          results.delete.push(res.rows[0].id);
+        }
+      } catch (err: any) {
+        throw attachBatchContext(err, { op: 'delete', index: i });
+      }
+    }
+
+    for (let i = 0; i < updateItems.length; i += 1) {
+      const item = updateItems[i];
+      try {
+        const res = await client.query<PeriodRow>(
+          `UPDATE ${TABLE}
+           SET start_date = $2::date, end_date = $3::date
+           WHERE id = $1::uuid
+           RETURNING id, start_date::text, end_date::text`,
+          [item.id, item.start_date, item.end_date],
+        );
+        const row = res.rows[0];
+        if (!row) {
+          const notFound = Object.assign(new Error('Period not found'), { code: 'PERIOD_NOT_FOUND' });
+          throw attachBatchContext(notFound, { op: 'update', index: i });
+        }
+        results.update.push(row);
+      } catch (err: any) {
+        if (err?._batch) throw err;
+        throw attachBatchContext(err, { op: 'update', index: i });
+      }
+    }
+
+    for (let i = 0; i < createItems.length; i += 1) {
+      const item = createItems[i];
+      try {
+        const res = await client.query<PeriodRow>(
+          `INSERT INTO ${TABLE} (start_date, end_date)
+           VALUES ($1::date, $2::date)
+           RETURNING id, start_date::text, end_date::text`,
+          [item.start_date, item.end_date],
+        );
+        if (res.rows[0]) {
+          results.create.push(res.rows[0]);
+        }
+      } catch (err: any) {
+        throw attachBatchContext(err, { op: 'create', index: i });
+      }
+    }
+
+    if (options?.dryRun) {
+      await client.query('ROLLBACK');
+    } else {
+      await client.query('COMMIT');
+    }
+
+    return results;
+  } catch (err: any) {
+    await client.query('ROLLBACK');
+    throw err;
+  } finally {
+    client.release();
+  }
 }

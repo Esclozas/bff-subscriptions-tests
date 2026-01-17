@@ -1,0 +1,1 @@
+{"ok":false,"code":"PERIOD_OVERLAP","message":"Period overlaps an existing one","results":{"create":[],"update":[],"delete":[]},"errors":[{"op":"create","index":0,"code":"PERIOD_OVERLAP","message":"Period overlaps an existing one"}]}

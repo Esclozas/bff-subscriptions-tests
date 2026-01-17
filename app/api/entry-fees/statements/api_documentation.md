@@ -225,10 +225,10 @@ curl -s -X PATCH "$BASE/api/entry-fees/statements/{STATEMENT_ID}" \
 
 ### Transitions autorisées
 
-| From   | To   |
-| ------ | ---- |
-| UNPAID | PAID |
-| PAID   | ❌   |
+| From   | To     |
+| ------ | ------ |
+| UNPAID | PAID   |
+| PAID   | UNPAID |
 
 ---
 

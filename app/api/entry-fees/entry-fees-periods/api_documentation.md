@@ -30,6 +30,8 @@ BASE="https://bff-subscriptions-tests.vercel.app"
 | GET     | /api/entry-fees/entry-fees-periods/:periodId               | Lire une période par id |
 | GET     | /api/entry-fees/entry-fees-periods/resolve?date=YYYY-MM-DD | Résout la période contenant la date |
 | POST    | /api/entry-fees/entry-fees-periods                         | Crée une période |
+| POST    | /api/entry-fees/entry-fees-periods/batch                   | Batch create/update/delete (transactionnel) |
+| POST    | /api/entry-fees/entry-fees-periods/validate                | Pré-validation batch (dry-run, aucune écriture) |
 | PUT     | /api/entry-fees/entry-fees-periods/:periodId               | Modifie une période (start/end, DB refuse overlap) |
 | DELETE  | /api/entry-fees/entry-fees-periods/:periodId               | Supprime une période |
 
@@ -46,9 +48,43 @@ BASE="https://bff-subscriptions-tests.vercel.app"
 * Anti-overlap : garanti par **Postgres (GiST / EXCLUDE)**
 * Erreurs attendues :
 
-  * `400` : dates invalides / `start_date >= end_date`
-  * `404` : période inconnue / resolve sans match
+  * `400` : dates invalides / `start_date >= end_date` / batch invalide
+  * `404` : période inconnue / resolve sans match / update batch sur id inconnu
   * `409` : overlap ou doublon exact
+  * `204` : période supprimée avec succès
+
+---
+
+## ✅ Batch & Validate (multi-changements)
+
+### Pourquoi c’est utile
+
+* Une seule requête pour toute la modale (create/update/delete)
+* Résultat global + erreurs par item
+* Pas d’état partiel : **tout ou rien** (rollback si conflit)
+
+### POST `/api/entry-fees/entry-fees-periods/batch`
+
+* Transactionnel : delete → update → create
+* `delete` d’un id inconnu = **ignoré**
+* `update` d’un id inconnu = **404 + rollback**
+* `errors[].index` = position dans la liste `create` / `update` / `delete`
+
+Body :
+
+```json
+{
+  "create": [{ "start_date": "YYYY-MM-DD", "end_date": "YYYY-MM-DD" }],
+  "update": [{ "id": "uuid", "start_date": "YYYY-MM-DD", "end_date": "YYYY-MM-DD" }],
+  "delete": [{ "id": "uuid" }]
+}
+```
+
+### POST `/api/entry-fees/entry-fees-periods/validate`
+
+* Même body que `batch`
+* **Dry-run transactionnel** : aucune écriture en DB
+* Sert à détecter les conflits avant “Enregistrer”
 
 ---
 
@@ -130,6 +166,32 @@ curl -s -X POST "$BASE/api/entry-fees/entry-fees-periods" \
 
 ---
 
+### 9) Batch (create/update/delete)
+
+```bash
+curl -s -X POST "$BASE/api/entry-fees/entry-fees-periods/batch" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "create": [{ "start_date": "2026-06-01", "end_date": "2026-07-01" }],
+    "update": [{ "id": "UUID_TO_UPDATE", "start_date": "2026-05-01", "end_date": "2026-06-01" }],
+    "delete": [{ "id": "UUID_TO_DELETE" }]
+  }' | jq .
+```
+
+### 10) Validate (dry-run)
+
+```bash
+curl -s -X POST "$BASE/api/entry-fees/entry-fees-periods/validate" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "create": [{ "start_date": "2026-06-01", "end_date": "2026-07-01" }],
+    "update": [{ "id": "UUID_TO_UPDATE", "start_date": "2026-05-01", "end_date": "2026-06-01" }],
+    "delete": [{ "id": "UUID_TO_DELETE" }]
+  }' | jq .
+```
+
+---
+
 ## 📌 JSON — Réponses API
 
 ### 🔹 Période (item)
@@ -172,6 +234,49 @@ Renvoyée par :
 
 ---
 
+### 🔹 Batch (résultat)
+
+```json
+{
+  "ok": true,
+  "results": {
+    "create": [{ "id": "uuid", "start_date": "YYYY-MM-DD", "end_date": "YYYY-MM-DD" }],
+    "update": [{ "id": "uuid", "start_date": "YYYY-MM-DD", "end_date": "YYYY-MM-DD" }],
+    "delete": ["uuid"]
+  },
+  "errors": []
+}
+```
+
+En cas d’erreur (ex: overlap) :
+
+```json
+{
+  "ok": false,
+  "code": "PERIOD_OVERLAP",
+  "message": "Period overlaps an existing one",
+  "results": {
+    "create": [],
+    "update": [],
+    "delete": []
+  },
+  "errors": [{ "op": "create", "index": 0, "code": "PERIOD_OVERLAP", "message": "Period overlaps an existing one" }]
+}
+```
+
+---
+
+### 🔹 Validate (réponse)
+
+```json
+{
+  "ok": true,
+  "errors": []
+}
+```
+
+---
+
 ## 📌 Résolution d’une date
 
 Une date `D` appartient à une période `P` si :
@@ -196,7 +301,7 @@ Exemples :
 
 
 
-## 9) Supprimer une période
+## 11) Supprimer une période
 
 ```bash
 curl -si -X DELETE "$BASE/api/entry-fees/entry-fees-periods/PERIOD_ID"
@@ -222,8 +327,8 @@ Ajoute une ligne :
 La liste devient :
 
 ```md
-- `400` : dates invalides / `periodId` invalide
-- `404` : période inconnue / resolve sans match
+- `400` : dates invalides / `periodId` invalide / batch invalide
+- `404` : période inconnue / resolve sans match / update batch sur id inconnu
 - `409` : overlap ou doublon exact
 - `204` : période supprimée avec succès
 ```
@@ -252,4 +357,3 @@ curl -s -X PUT "$BASE/api/entry-fees/entry-fees-periods/PERIOD_ID" \
   -H "Content-Type: application/json" \
   -d '{"start_date":"2026-01-01","end_date":"2026-02-01"}' | jq .
 ```
-

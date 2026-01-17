@@ -204,10 +204,10 @@ Agrégation pratique pour l’UI (sans recalcul métier).
 
 #### Transitions autorisées
 
-| From     | To   |
-| -------- | ---- |
-| `UNPAID` | `PAID` |
-| `PAID`   | ❌   |
+| From     | To       |
+| -------- | -------- |
+| `UNPAID` | `PAID`   |
+| `PAID`   | `UNPAID` |
 
 #### Erreurs
 

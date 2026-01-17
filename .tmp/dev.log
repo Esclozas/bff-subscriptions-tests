@@ -1,0 +1,19 @@
+
+> bff-subscriptions@0.1.0 dev
+> next dev --hostname 127.0.0.1 --port 3010
+
+[baseline-browser-mapping] The data in this module is over two months old.  To ensure accurate Baseline data, please update: `npm i baseline-browser-mapping@latest -D`
+▲ Next.js 16.1.1 (Turbopack)
+- Local:         http://127.0.0.1:3010
+- Network:       http://127.0.0.1:3010
+- Environments: .env.local
+
+✓ Starting...
+✓ Ready in 463ms
+ GET /api/entry-fees/entry-fees-periods/resolve?date=2026-01-20 200 in 427ms (compile: 227ms, render: 200ms)
+ POST /api/entry-fees/entry-fees-periods/batch 200 in 329ms (compile: 67ms, render: 262ms)
+ POST /api/entry-fees/entry-fees-periods/validate 409 in 207ms (compile: 53ms, render: 154ms)
+ POST /api/entry-fees/entry-fees-periods/batch 409 in 138ms (compile: 1330µs, render: 137ms)
+ POST /api/entry-fees/entry-fees-periods/batch 200 in 147ms (compile: 1412µs, render: 145ms)
+[baseline-browser-mapping] The data in this module is over two months old.  To ensure accurate Baseline data, please update: `npm i baseline-browser-mapping@latest -D`
+[?25h
