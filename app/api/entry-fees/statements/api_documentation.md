@@ -45,6 +45,7 @@ BASE="http://localhost:3000"
 * ✅ Seul champ modifiable : `payment_status`
 * ❌ Pas de DELETE → on annule via `/cancel`
 * ✅ Annulation = **event négatif sur payment list**
+* ✅ Auto-PAID à la création si `total_amount=0` (toutes lignes à 0) → `payment_status=PAID` + `paid_at=now()`
 
 ---
 
@@ -102,6 +103,8 @@ Réponse :
 Notes :
 
 * `subscriptions_count` est inclus dans chaque item (nombre de souscriptions liées au statement).
+* `paid_at` est renseigné quand `payment_status=PAID`, vidé quand `UNPAID`.
+* `cancelled_at` est renseigné quand `issue_status=CANCELLED`.
 
 ---
 
@@ -123,6 +126,9 @@ Retour :
   "payment_status": "UNPAID",
   "currency": "EUR",
   "total_amount": "4000",
+  "created_at": "2025-03-05T10:13:00.000Z",
+  "paid_at": null,
+  "cancelled_at": null,
   "subscriptions_count": 8
 }
 ```
@@ -257,6 +263,11 @@ curl -s -X PATCH "$BASE/api/entry-fees/statements/{STATEMENT_ID}" \
 | UNPAID | PAID   |
 | PAID   | UNPAID |
 
+Notes :
+
+* `paid_at` est mis à `now()` quand le status passe à `PAID`.
+* `paid_at` est remis à `null` quand on repasse à `UNPAID`.
+
 ---
 
 ## 📌 Batch payment_status
@@ -318,6 +329,7 @@ Effets :
 
 * `issue_status` → `CANCELLED`
 * `payment_status` inchangé
+* `cancelled_at` → `now()`
 * création d’un **event négatif** sur la payment list
 * transaction DB atomique
 * anti double-annulation

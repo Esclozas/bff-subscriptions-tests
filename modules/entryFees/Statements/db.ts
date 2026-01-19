@@ -34,6 +34,8 @@ export type StatementRow = {
   currency: string;
   total_amount: string | number;
   created_at: string;
+  paid_at: string | null;
+  cancelled_at: string | null;
   subscriptions_count?: number;
 };
 
@@ -105,6 +107,8 @@ export async function listStatements(args: {
       currency,
       total_amount,
       created_at,
+      paid_at,
+      cancelled_at,
       (
         SELECT COUNT(*)::int
         FROM ${sql.unsafe(T_LINE)} ss
@@ -144,6 +148,8 @@ export async function getStatement(statementId: string) {
       currency,
       total_amount,
       created_at,
+      paid_at,
+      cancelled_at,
       (
         SELECT COUNT(*)::int
         FROM ${sql.unsafe(T_LINE)} ss
@@ -181,6 +187,11 @@ export async function updateStatementPaymentStatus(statementId: string, newStatu
   const rows = (await sql`
     UPDATE ${sql.unsafe(T_STATEMENT)}
     SET payment_status = ${newStatus}::entry_fees_statement_payment_status_enum
+      , paid_at = CASE
+          WHEN ${newStatus}::entry_fees_statement_payment_status_enum = 'PAID'::entry_fees_statement_payment_status_enum
+            THEN NOW()
+          ELSE NULL
+        END
     WHERE id = ${statementId}::uuid
     RETURNING
       id,
@@ -192,6 +203,8 @@ export async function updateStatementPaymentStatus(statementId: string, newStatu
       currency,
       total_amount,
       created_at,
+      paid_at,
+      cancelled_at,
       (
         SELECT COUNT(*)::int
         FROM ${sql.unsafe(T_LINE)} ss
@@ -219,6 +232,8 @@ export async function updateStatementsPaymentStatusBatch(
       currency,
       total_amount,
       created_at,
+      paid_at,
+      cancelled_at,
       (
         SELECT COUNT(*)::int
         FROM ${T_LINE} ss
@@ -233,6 +248,11 @@ export async function updateStatementsPaymentStatusBatch(
   const updateSql = `
     UPDATE ${T_STATEMENT}
     SET payment_status = $2::entry_fees_statement_payment_status_enum
+      , paid_at = CASE
+          WHEN $2::entry_fees_statement_payment_status_enum = 'PAID'::entry_fees_statement_payment_status_enum
+            THEN NOW()
+          ELSE NULL
+        END
     WHERE id = $1::uuid
     RETURNING
       id,
@@ -244,6 +264,8 @@ export async function updateStatementsPaymentStatusBatch(
       currency,
       total_amount,
       created_at,
+      paid_at,
+      cancelled_at,
       (
         SELECT COUNT(*)::int
         FROM ${T_LINE} ss
@@ -304,12 +326,14 @@ export async function updateStatementsPaymentStatusBatch(
  * -> Tu devras ajuster les colonnes exactes.
  */
 export async function cancelStatementWithEvent(statementId: string, reason?: string | null) {
-  const sql = getSql();
+  const pool = getPool();
+  const client = await pool.connect();
 
-  // neon serverless supporte `sql.begin(...)`
-  // https://github.com/neondatabase/serverless (pattern: sql.begin(async (tx)=>...))
-  const result = await (sql as any).begin(async (tx: any) => {
-    const sRows = (await tx`
+  try {
+    await client.query('BEGIN');
+
+    const sRows = await client.query<StatementRow>(
+      `
       SELECT
         id,
         entry_fees_payment_list_id,
@@ -320,26 +344,38 @@ export async function cancelStatementWithEvent(statementId: string, reason?: str
         currency,
         total_amount,
         created_at,
+        paid_at,
+        cancelled_at,
         (
           SELECT COUNT(*)::int
-          FROM ${tx.unsafe(T_LINE)} ss
+          FROM ${T_LINE} ss
           WHERE ss.entry_fees_statement_id = s.id
         ) AS subscriptions_count
-      FROM ${tx.unsafe(T_STATEMENT)} s
-      WHERE id = ${statementId}::uuid
+      FROM ${T_STATEMENT} s
+      WHERE id = $1::uuid
       FOR UPDATE
       LIMIT 1
-    `) as unknown as StatementRow[];
+      `,
+      [statementId],
+    );
 
-    const s = sRows[0] ?? null;
-    if (!s) return { kind: 'NOT_FOUND' as const };
+    const s = sRows.rows[0] ?? null;
+    if (!s) {
+      await client.query('ROLLBACK');
+      return { kind: 'NOT_FOUND' as const };
+    }
 
-    if (s.issue_status === 'CANCELLED') return { kind: 'ALREADY_CANCELLED' as const };
+    if (s.issue_status === 'CANCELLED') {
+      await client.query('ROLLBACK');
+      return { kind: 'ALREADY_CANCELLED' as const };
+    }
 
-    const updatedRows = (await tx`
-      UPDATE ${tx.unsafe(T_STATEMENT)}
-      SET issue_status = 'CANCELLED'::entry_fees_statement_issue_status_enum
-      WHERE id = ${statementId}::uuid
+    const updatedRows = await client.query<StatementRow>(
+      `
+      UPDATE ${T_STATEMENT}
+      SET issue_status = 'CANCELLED'::entry_fees_statement_issue_status_enum,
+          cancelled_at = NOW()
+      WHERE id = $1::uuid
       RETURNING
         id,
         entry_fees_payment_list_id,
@@ -350,37 +386,48 @@ export async function cancelStatementWithEvent(statementId: string, reason?: str
         currency,
         total_amount,
         created_at,
+        paid_at,
+        cancelled_at,
         (
           SELECT COUNT(*)::int
-          FROM ${tx.unsafe(T_LINE)} ss
-          WHERE ss.entry_fees_statement_id = id
+          FROM ${T_LINE} ss
+          WHERE ss.entry_fees_statement_id = $1::uuid
         ) AS subscriptions_count
-    `) as unknown as StatementRow[];
+      `,
+      [statementId],
+    );
 
-    const updated = updatedRows[0];
+    const updated = updatedRows.rows[0];
 
     // Insert event (delta négatif)
     // ⚠️ adapte ces colonnes selon ton schéma réel
-    const eRows = (await tx`
-      INSERT INTO ${tx.unsafe(T_EVENT)} (
+    const eRows = await client.query<{ id: string }>(
+      `
+      INSERT INTO ${T_EVENT} (
         entry_fees_payment_list_id,
         currency,
         amount_delta,
         statement_id,
         reason
       )
-      VALUES (
-        ${updated.entry_fees_payment_list_id}::uuid,
-        ${updated.currency},
-        ${Number(updated.total_amount) * -1},
-        ${updated.id}::uuid,
-        ${reason ?? null}
-      )
+      VALUES ($1::uuid, $2, $3, $4::uuid, $5)
       RETURNING id
-    `) as unknown as { id: string }[];
+      `,
+      [
+        updated.entry_fees_payment_list_id,
+        updated.currency,
+        Number(updated.total_amount) * -1,
+        updated.id,
+        reason ?? null,
+      ],
+    );
 
-    return { kind: 'OK' as const, statement: updated, event: eRows[0] ?? null };
-  });
-
-  return result;
+    await client.query('COMMIT');
+    return { kind: 'OK' as const, statement: updated, event: eRows.rows[0] ?? null };
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
+  } finally {
+    client.release();
+  }
 }

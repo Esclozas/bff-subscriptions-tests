@@ -19,6 +19,7 @@ Cette API respecte un modèle **snapshot + historique immuable**, adapté aux ob
 - La seule mutation autorisée est le **changement de payment_status**
 - L’annulation est une **action métier transactionnelle** (avec impact payment list)
 - Aucun DELETE : on annule via `issue_status = CANCELLED`
+- Auto-PAID à la création si `total_amount=0` (toutes lignes à 0) → `payment_status=PAID` + `paid_at=now()`
 
 ---
 
@@ -37,6 +38,8 @@ Cette API respecte un modèle **snapshot + historique immuable**, adapté aux ob
 | `currency` | Devise |
 | `total_amount` | Montant total figé |
 | `created_at` | Date de création |
+| `paid_at` | Date de paiement (null si UNPAID) |
+| `cancelled_at` | Date d’annulation (null si non annulé) |
 
 Contrainte :
 ```
@@ -102,7 +105,9 @@ Retourne une liste paginée par **cursor**, avec **total global**.
       "payment_status": "UNPAID",
       "currency": "EUR",
       "total_amount": "4000",
-      "created_at": "2025-03-05T10:13:00.000Z"
+      "created_at": "2025-03-05T10:13:00.000Z",
+      "paid_at": null,
+      "cancelled_at": null
     }
   ],
   "total": 4,
@@ -129,7 +134,9 @@ Retourne le document financier figé.
   "payment_status": "UNPAID",
   "currency": "EUR",
   "total_amount": "4000",
-  "created_at": "2025-03-05T10:13:00.000Z"
+  "created_at": "2025-03-05T10:13:00.000Z",
+  "paid_at": null,
+  "cancelled_at": null
 }
 ```
 
@@ -139,11 +146,11 @@ Retourne le document financier figé.
 
 ---
 
-## 3. Lignes (subscriptions) d’un statement
+## 3. Lignes (subscriptions + infos souscription) d’un statement
 
 ### `GET /api/entry-fees/statements/{statementId}/subscriptions`
 
-Retourne les **lignes figées** du statement.
+Retourne les **lignes figées** du statement + infos de souscription (live).
 
 #### Réponse
 
@@ -151,15 +158,35 @@ Retourne les **lignes figées** du statement.
 {
   "items": [
     {
+      "id": "uuid",
+      "entry_fees_statement_id": "uuid",
       "subscription_id": "uuid",
       "snapshot_source_group_id": "uuid",
-      "snapshot_total_amount": "500"
+      "snapshot_total_amount": "500",
+      "operation_id": "OP-123",
+      "investor_name": "Doe",
+      "investor_first_name": "Jane",
+      "fund_name": "Fund A",
+      "product_name": "Product A",
+      "team_name": "Team A",
+      "part_name": "Part A",
+      "owner_full_name": "Owner Name",
+      "validation_date": "2025-03-05T10:13:00.000Z",
+      "amount_value": 1000,
+      "amount_currency": "EUR",
+      "entry_fees_percent": 1.5,
+      "entry_fees_amount": 15,
+      "entry_fees_amount_total": 15
     }
   ],
-  "total": 8,
-  "limit": 8
+  "total": 8
 }
 ```
+
+Notes :
+
+* `snapshot_total_amount` = montant fige au moment du statement (valeur officielle).
+* `amount_value` / `amount_currency` = montant live de la souscription (peut differer).
 
 ---
 
@@ -209,6 +236,11 @@ Agrégation pratique pour l’UI (sans recalcul métier).
 | `UNPAID` | `PAID`   |
 | `PAID`   | `UNPAID` |
 
+Notes :
+
+* `paid_at` est mis à `now()` quand le status passe à `PAID`.
+* `paid_at` est remis à `null` quand on repasse à `UNPAID`.
+
 #### Erreurs
 
 * `400` : payment_status invalide ou transition interdite
@@ -227,6 +259,7 @@ Annule définitivement un statement.
 * Transaction DB obligatoire
 * `issue_status` → `CANCELLED`
 * `payment_status` inchangé
+* `cancelled_at` → `now()`
 * Création d’un **event négatif** sur la payment list
 * Anti double-annulation
 

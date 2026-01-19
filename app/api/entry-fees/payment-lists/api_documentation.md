@@ -119,6 +119,9 @@ curl -s "$BASE/api/entry-fees/payment-lists/summary?limit=5&cursor=2026-01-07T19
 Si les statements **ne peuvent pas être créés** →
 ❌ **le Payment List n’est PAS créé**
 
+Note :
+* Si un statement est créé avec `total_amount=0` (toutes lignes à 0), il est **auto‑marqué PAID** (`payment_status=PAID`, `paid_at=now()`).
+
 ### Payload
 
 ```json

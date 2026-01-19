@@ -56,14 +56,25 @@ export async function createStatementsAndLinesTx(
         group_key,
         statement_number,
         currency,
-        total_amount
+        total_amount,
+        payment_status,
+        paid_at
       )
       SELECT
         $1::uuid,
         s.group_key,
         s.statement_number,
         s.currency,
-        (s.total_amount)::numeric
+        (s.total_amount)::numeric,
+        CASE
+          WHEN (s.total_amount)::numeric = 0
+            THEN 'PAID'::entry_fees_statement_payment_status_enum
+          ELSE 'UNPAID'::entry_fees_statement_payment_status_enum
+        END,
+        CASE
+          WHEN (s.total_amount)::numeric = 0 THEN NOW()
+          ELSE NULL
+        END
       FROM jsonb_to_recordset($2::jsonb) AS s(
         group_key text,
         statement_number text,
