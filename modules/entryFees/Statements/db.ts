@@ -1,5 +1,5 @@
-import { neon } from '@neondatabase/serverless';
-import type { IssueStatus, PaymentStatus } from './status';
+import { neon, Pool } from '@neondatabase/serverless';
+import { canTransitionPaymentStatus, type IssueStatus, type PaymentStatus } from './status';
 
 let _sql: ReturnType<typeof neon> | null = null;
 function getSql() {
@@ -8,6 +8,15 @@ function getSql() {
   if (!url) throw new Error('NEON_DATABASE_URL is not set');
   _sql = neon(url);
   return _sql;
+}
+
+let _pool: Pool | null = null;
+function getPool() {
+  if (_pool) return _pool;
+  const url = process.env.NEON_DATABASE_URL;
+  if (!url) throw new Error('NEON_DATABASE_URL is not set');
+  _pool = new Pool({ connectionString: url });
+  return _pool;
 }
 
 const T_STATEMENT = 'entry_fees_statement';
@@ -25,6 +34,7 @@ export type StatementRow = {
   currency: string;
   total_amount: string | number;
   created_at: string;
+  subscriptions_count?: number;
 };
 
 export type LineRow = {
@@ -94,8 +104,13 @@ export async function listStatements(args: {
       payment_status,
       currency,
       total_amount,
-      created_at
-    FROM ${sql.unsafe(T_STATEMENT)}
+      created_at,
+      (
+        SELECT COUNT(*)::int
+        FROM ${sql.unsafe(T_LINE)} ss
+        WHERE ss.entry_fees_statement_id = s.id
+      ) AS subscriptions_count
+    FROM ${sql.unsafe(T_STATEMENT)} s
     ${whereFilters}
     ${
       cursorCreatedAt && cursorId
@@ -128,8 +143,13 @@ export async function getStatement(statementId: string) {
       payment_status,
       currency,
       total_amount,
-      created_at
-    FROM ${sql.unsafe(T_STATEMENT)}
+      created_at,
+      (
+        SELECT COUNT(*)::int
+        FROM ${sql.unsafe(T_LINE)} ss
+        WHERE ss.entry_fees_statement_id = s.id
+      ) AS subscriptions_count
+    FROM ${sql.unsafe(T_STATEMENT)} s
     WHERE id = ${statementId}::uuid
     LIMIT 1
   `) as unknown as StatementRow[];
@@ -171,9 +191,106 @@ export async function updateStatementPaymentStatus(statementId: string, newStatu
       payment_status,
       currency,
       total_amount,
-      created_at
+      created_at,
+      (
+        SELECT COUNT(*)::int
+        FROM ${sql.unsafe(T_LINE)} ss
+        WHERE ss.entry_fees_statement_id = id
+      ) AS subscriptions_count
   `) as unknown as StatementRow[];
   return rows[0] ?? null;
+}
+
+export async function updateStatementsPaymentStatusBatch(
+  updates: Array<{ id: string; payment_status: PaymentStatus }>,
+) {
+  if (!updates.length) return [];
+  const pool = getPool();
+  const client = await pool.connect();
+
+  const selectSql = `
+    SELECT
+      id,
+      entry_fees_payment_list_id,
+      group_key,
+      statement_number,
+      issue_status,
+      payment_status,
+      currency,
+      total_amount,
+      created_at,
+      (
+        SELECT COUNT(*)::int
+        FROM ${T_LINE} ss
+        WHERE ss.entry_fees_statement_id = s.id
+      ) AS subscriptions_count
+    FROM ${T_STATEMENT} s
+    WHERE id = $1::uuid
+    FOR UPDATE
+    LIMIT 1
+  `;
+
+  const updateSql = `
+    UPDATE ${T_STATEMENT}
+    SET payment_status = $2::entry_fees_statement_payment_status_enum
+    WHERE id = $1::uuid
+    RETURNING
+      id,
+      entry_fees_payment_list_id,
+      group_key,
+      statement_number,
+      issue_status,
+      payment_status,
+      currency,
+      total_amount,
+      created_at,
+      (
+        SELECT COUNT(*)::int
+        FROM ${T_LINE} ss
+        WHERE ss.entry_fees_statement_id = id
+      ) AS subscriptions_count
+  `;
+
+  try {
+    await client.query('BEGIN');
+    const results: StatementRow[] = [];
+
+    for (let i = 0; i < updates.length; i += 1) {
+      const { id, payment_status } = updates[i];
+
+      const sRows = (await client.query(selectSql, [id])).rows as StatementRow[];
+      const s = sRows[0] ?? null;
+      if (!s) {
+        const err: any = new Error('STATEMENT_NOT_FOUND');
+        err.code = 'STATEMENT_NOT_FOUND';
+        err._batch = { op: 'update', index: i, id };
+        throw err;
+      }
+
+      if (s.payment_status === payment_status) {
+        results.push(s);
+        continue;
+      }
+
+      if (!canTransitionPaymentStatus(s.payment_status, payment_status)) {
+        const err: any = new Error('INVALID_TRANSITION');
+        err.code = 'INVALID_TRANSITION';
+        err._batch = { op: 'update', index: i, id, from: s.payment_status, to: payment_status };
+        throw err;
+      }
+
+      const updatedRows = (await client.query(updateSql, [id, payment_status])).rows as StatementRow[];
+      results.push(updatedRows[0]);
+    }
+
+    await client.query('COMMIT');
+    return results;
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
+  } finally {
+    client.release();
+  }
 }
 
 /**
@@ -202,8 +319,13 @@ export async function cancelStatementWithEvent(statementId: string, reason?: str
         payment_status,
         currency,
         total_amount,
-        created_at
-      FROM ${tx.unsafe(T_STATEMENT)}
+        created_at,
+        (
+          SELECT COUNT(*)::int
+          FROM ${tx.unsafe(T_LINE)} ss
+          WHERE ss.entry_fees_statement_id = s.id
+        ) AS subscriptions_count
+      FROM ${tx.unsafe(T_STATEMENT)} s
       WHERE id = ${statementId}::uuid
       FOR UPDATE
       LIMIT 1
@@ -227,7 +349,12 @@ export async function cancelStatementWithEvent(statementId: string, reason?: str
         payment_status,
         currency,
         total_amount,
-        created_at
+        created_at,
+        (
+          SELECT COUNT(*)::int
+          FROM ${tx.unsafe(T_LINE)} ss
+          WHERE ss.entry_fees_statement_id = id
+        ) AS subscriptions_count
     `) as unknown as StatementRow[];
 
     const updated = updatedRows[0];

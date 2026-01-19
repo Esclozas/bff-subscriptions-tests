@@ -32,6 +32,7 @@ BASE="http://localhost:3000"
 |     GET | /api/entry-fees/statements/:id/summary       | Vue UI complète                         |
 |     GET | /api/entry-fees/subscriptions/:id/statements | Historique des statements d’une souscription |
 |   PATCH | /api/entry-fees/statements/:id               | Changement de payment_status uniquement |
+|    POST | /api/entry-fees/statements/payment-status/batch | Changement payment_status en batch   |
 |    POST | /api/entry-fees/statements/:id/cancel        | Annulation métier (transaction + event) |
 
 ---
@@ -98,6 +99,10 @@ Réponse :
 }
 ```
 
+Notes :
+
+* `subscriptions_count` est inclus dans chaque item (nombre de souscriptions liées au statement).
+
 ---
 
 ## 📌 Détail d’un statement
@@ -117,7 +122,8 @@ Retour :
   "issue_status": "ISSUED",
   "payment_status": "UNPAID",
   "currency": "EUR",
-  "total_amount": "4000"
+  "total_amount": "4000",
+  "subscriptions_count": 8
 }
 ```
 
@@ -250,6 +256,51 @@ curl -s -X PATCH "$BASE/api/entry-fees/statements/{STATEMENT_ID}" \
 | ------ | ------ |
 | UNPAID | PAID   |
 | PAID   | UNPAID |
+
+---
+
+## 📌 Batch payment_status
+
+### POST `/api/entry-fees/statements/payment-status/batch`
+
+Body :
+
+```json
+{
+  "updates": [
+    { "id": "uuid", "payment_status": "PAID" },
+    { "id": "uuid", "payment_status": "PAID" }
+  ]
+}
+```
+
+Réponse (succès) :
+
+```json
+{
+  "ok": true,
+  "results": [ ... ],
+  "errors": []
+}
+```
+
+Réponse (erreur) :
+
+```json
+{
+  "ok": false,
+  "code": "STATEMENT_NOT_FOUND",
+  "message": "Statement not found",
+  "results": [],
+  "errors": [{ "op": "update", "index": 0, "statement_id": "uuid", "code": "STATEMENT_NOT_FOUND" }]
+}
+```
+
+Notes :
+
+* Opération **transactionnelle** : tout ou rien.
+* Si un `id` est inconnu → 404 + rollback.
+* Si transition invalide → 400 + rollback.
 
 ---
 
