@@ -9,11 +9,14 @@
 - Environments: .env.local
 
 ✓ Starting...
-✓ Ready in 463ms
- GET /api/entry-fees/entry-fees-periods/resolve?date=2026-01-20 200 in 427ms (compile: 227ms, render: 200ms)
- POST /api/entry-fees/entry-fees-periods/batch 200 in 329ms (compile: 67ms, render: 262ms)
- POST /api/entry-fees/entry-fees-periods/validate 409 in 207ms (compile: 53ms, render: 154ms)
- POST /api/entry-fees/entry-fees-periods/batch 409 in 138ms (compile: 1330µs, render: 137ms)
- POST /api/entry-fees/entry-fees-periods/batch 200 in 147ms (compile: 1412µs, render: 145ms)
+✓ Ready in 689ms
+ GET /api/entry-fees/entry-fees-periods/resolve?date=2026-01-20 200 in 1434ms (compile: 247ms, render: 1187ms)
+ POST /api/entry-fees/entry-fees-periods/validate 400 in 77ms (compile: 73ms, render: 4ms)
+ POST /api/entry-fees/entry-fees-periods/validate 200 in 380ms (compile: 1620µs, render: 378ms)
+ POST /api/entry-fees/entry-fees-periods/batch 200 in 195ms (compile: 58ms, render: 137ms)
+ GET /api/entry-fees/entry-fees-periods/resolve?date=2099-05-31 200 in 61ms (compile: 1530µs, render: 59ms)
+ POST /api/entry-fees/entry-fees-periods/validate 409 in 157ms (compile: 1363µs, render: 156ms)
+ POST /api/entry-fees/entry-fees-periods/validate 200 in 144ms (compile: 1529µs, render: 142ms)
+ POST /api/entry-fees/entry-fees-periods/batch 200 in 168ms (compile: 1355µs, render: 166ms)
 [baseline-browser-mapping] The data in this module is over two months old.  To ensure accurate Baseline data, please update: `npm i baseline-browser-mapping@latest -D`
 [?25h

@@ -28,7 +28,7 @@ BASE="http://localhost:3000"
 | ------: | -------------------------------------------- | --------------------------------------- |
 |     GET | /api/entry-fees/statements                   | Liste des statements (metadata)         |
 |     GET | /api/entry-fees/statements/:id               | Détail d’un statement                   |
-|     GET | /api/entry-fees/statements/:id/subscriptions | Lignes figées du statement              |
+|     GET | /api/entry-fees/statements/:id/subscriptions | Lignes + infos souscription (live)      |
 |     GET | /api/entry-fees/statements/:id/summary       | Vue UI complète                         |
 |     GET | /api/entry-fees/subscriptions/:id/statements | Historique des statements d’une souscription |
 |   PATCH | /api/entry-fees/statements/:id               | Changement de payment_status uniquement |
@@ -161,7 +161,7 @@ Réponse :
 
 ---
 
-## 📌 Lignes (subscriptions figées)
+## 📌 Lignes (subscriptions + infos souscription)
 
 ### GET `/api/entry-fees/statements/:id/subscriptions`
 
@@ -175,14 +175,35 @@ Retour :
 {
   "items": [
     {
+      "id": "uuid",
+      "entry_fees_statement_id": "uuid",
       "subscription_id": "uuid",
-      "snapshot_total_amount": "500"
+      "snapshot_source_group_id": "uuid",
+      "snapshot_total_amount": "500",
+      "operation_id": "OP-123",
+      "investor_name": "Doe",
+      "investor_first_name": "Jane",
+      "fund_name": "Fund A",
+      "product_name": "Product A",
+      "team_name": "Team A",
+      "part_name": "Part A",
+      "owner_full_name": "Owner Name",
+      "validation_date": "2025-03-05T10:13:00.000Z",
+      "amount_value": 1000,
+      "amount_currency": "EUR",
+      "entry_fees_percent": 1.5,
+      "entry_fees_amount": 15,
+      "entry_fees_amount_total": 15
     }
   ],
-  "total": 8,
-  "limit": 8
+  "total": 1
 }
 ```
+
+Notes :
+
+* `snapshot_total_amount` = montant fige au moment du statement (valeur officielle).
+* `amount_value` / `amount_currency` = montant live de la souscription (peut differer).
 
 ---
 

@@ -2,7 +2,7 @@ export const runtime = 'nodejs';
 
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
-import { withCors, handleOptions } from '@/lib/cors';
+import { withCors } from '@/lib/cors';
 import { getPaymentList, getPaymentListEvents, insertPaymentListEvent } from '@/modules/entryFees/payment-lists/db';
 
 type Ctx = { params: Promise<{ id: string }> };

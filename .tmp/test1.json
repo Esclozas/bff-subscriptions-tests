@@ -1,1 +1,1 @@
-{"message":"Bad Request","issues":[{"code":"custom","message":"Invalid range: start_date must be < end_date","path":["create",0,"start_date"]}]}
+{"message":"Bad Request","issues":[{"code":"custom","message":"Invalid range: start_date must be <= end_date","path":["create",0,"start_date"]}]}

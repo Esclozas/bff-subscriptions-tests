@@ -24,7 +24,7 @@ const TABLE = 'entry_fees_period';
 export type EntryFeesPeriod = {
   id: string;
   start_date: string; // YYYY-MM-DD
-  end_date: string;   // YYYY-MM-DD (exclusif)
+  end_date: string;   // YYYY-MM-DD (inclusif)
   created_by?: string | null; // si tu ajoutes la colonne plus tard
 };
 
@@ -68,6 +68,28 @@ type PeriodRowWithTotal = PeriodRow & {
   total_count: number;
 };
 
+function addDays(date: string, days: number) {
+  const [year, month, day] = date.split('-').map(Number);
+  const utc = new Date(Date.UTC(year, month - 1, day));
+  utc.setUTCDate(utc.getUTCDate() + days);
+  return utc.toISOString().slice(0, 10);
+}
+
+function toExclusiveEndDate(endDateInclusive: string) {
+  return addDays(endDateInclusive, 1);
+}
+
+function fromExclusiveEndDate(endDateExclusive: string) {
+  return addDays(endDateExclusive, -1);
+}
+
+function mapPeriodRow(row: PeriodRow): EntryFeesPeriod {
+  return {
+    id: row.id,
+    start_date: row.start_date,
+    end_date: fromExclusiveEndDate(row.end_date),
+  };
+}
 
 export async function listPeriods(args: {
   from?: string | null;
@@ -79,6 +101,7 @@ export async function listPeriods(args: {
 
   const from = args.from ?? null;
   const to = args.to ?? null;
+  const toExclusive = to ? toExclusiveEndDate(to) : null;
   const limit = Math.min(Math.max(args.limit ?? 200, 1), 500);
 
   // Cursor: (start_date, id) strictement > (cursorStart, cursorId)
@@ -97,7 +120,7 @@ export async function listPeriods(args: {
   }
 
   // Intersection intervalle demandé:
-  // period intersects [from,to)  <=> start_date < to AND end_date > from
+  // period intersects [from,to]  <=> start_date < (to + 1 day) AND end_date > from
   const rows = (await sql`
     SELECT
         id,
@@ -107,7 +130,7 @@ export async function listPeriods(args: {
     FROM ${sql.unsafe(TABLE)}
     WHERE
       (${from}::date IS NULL OR end_date > ${from}::date)
-      AND (${to}::date IS NULL OR start_date < ${to}::date)
+      AND (${toExclusive}::date IS NULL OR start_date < ${toExclusive}::date)
       AND (
         ${cursorStart}::date IS NULL
         OR (start_date, id) > (${cursorStart}::date, ${cursorId}::uuid)
@@ -127,7 +150,7 @@ export async function listPeriods(args: {
       : null;
 
   return {
-    items: sliced.map(({ total_count, ...r }) => r),
+    items: sliced.map((row) => mapPeriodRow(row)),
     nextCursor,
     total,
   };
@@ -142,7 +165,7 @@ export async function getPeriodById(periodId: string) {
     LIMIT 1
   `) as unknown as PeriodRow[];
 
-  return rows[0] ?? null;
+  return rows[0] ? mapPeriodRow(rows[0]) : null;
 }
 
 export async function resolvePeriodByDate(date: string) {
@@ -156,7 +179,7 @@ export async function resolvePeriodByDate(date: string) {
     LIMIT 1
   `) as unknown as PeriodRow[];
 
-  return rows[0] ?? null;
+  return rows[0] ? mapPeriodRow(rows[0]) : null;
 }
 
 export async function createPeriod(body: {
@@ -164,14 +187,15 @@ export async function createPeriod(body: {
   end_date: string;
 }) {
   const sql = getSql();
+  const endDateExclusive = toExclusiveEndDate(body.end_date);
 
   const rows = (await sql`
     INSERT INTO ${sql.unsafe(TABLE)} (start_date, end_date)
-    VALUES (${body.start_date}::date, ${body.end_date}::date)
+    VALUES (${body.start_date}::date, ${endDateExclusive}::date)
     RETURNING id, start_date::text, end_date::text
   `) as unknown as PeriodRow[];
 
-  return rows[0] ?? null;
+  return rows[0] ? mapPeriodRow(rows[0]) : null;
 }
 
 export async function deletePeriodById(periodId: string) {
@@ -191,6 +215,7 @@ export async function updatePeriodById(
   body: { start_date: string; end_date: string }
 ) {
   const sql = getSql();
+  const endDateExclusive = toExclusiveEndDate(body.end_date);
 
   type Row = {
     id: string;
@@ -202,12 +227,12 @@ export async function updatePeriodById(
     UPDATE ${sql.unsafe(TABLE)}
     SET
       start_date = ${body.start_date}::date,
-      end_date   = ${body.end_date}::date
+      end_date   = ${endDateExclusive}::date
     WHERE id = ${periodId}::uuid
     RETURNING id, start_date::text, end_date::text
   `) as unknown as Row[];
 
-  return rows[0] ?? null; // null = not found
+  return rows[0] ? mapPeriodRow(rows[0]) : null; // null = not found
 }
 
 function attachBatchContext(err: any, ctx: EntryFeesPeriodBatchContext) {
@@ -250,20 +275,21 @@ export async function applyEntryFeesPeriodBatch(
 
     for (let i = 0; i < updateItems.length; i += 1) {
       const item = updateItems[i];
+      const endDateExclusive = toExclusiveEndDate(item.end_date);
       try {
         const res = await client.query<PeriodRow>(
           `UPDATE ${TABLE}
            SET start_date = $2::date, end_date = $3::date
            WHERE id = $1::uuid
            RETURNING id, start_date::text, end_date::text`,
-          [item.id, item.start_date, item.end_date],
+          [item.id, item.start_date, endDateExclusive],
         );
         const row = res.rows[0];
         if (!row) {
           const notFound = Object.assign(new Error('Period not found'), { code: 'PERIOD_NOT_FOUND' });
           throw attachBatchContext(notFound, { op: 'update', index: i });
         }
-        results.update.push(row);
+        results.update.push(mapPeriodRow(row));
       } catch (err: any) {
         if (err?._batch) throw err;
         throw attachBatchContext(err, { op: 'update', index: i });
@@ -272,15 +298,16 @@ export async function applyEntryFeesPeriodBatch(
 
     for (let i = 0; i < createItems.length; i += 1) {
       const item = createItems[i];
+      const endDateExclusive = toExclusiveEndDate(item.end_date);
       try {
         const res = await client.query<PeriodRow>(
           `INSERT INTO ${TABLE} (start_date, end_date)
            VALUES ($1::date, $2::date)
            RETURNING id, start_date::text, end_date::text`,
-          [item.start_date, item.end_date],
+          [item.start_date, endDateExclusive],
         );
         if (res.rows[0]) {
-          results.create.push(res.rows[0]);
+          results.create.push(mapPeriodRow(res.rows[0]));
         }
       } catch (err: any) {
         throw attachBatchContext(err, { op: 'create', index: i });

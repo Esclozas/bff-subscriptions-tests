@@ -80,7 +80,6 @@ export async function generateStatementsAtomicTx(
   const usedGroupStructureId = args.groupStructureId; // source de vérité : snapshot du payment list
   if (activeId !== usedGroupStructureId) {
     // Pas bloquant, mais utile en debug (ex: tu génères avec une ancienne version)
-    // eslint-disable-next-line no-console
     console.warn('[entryFees] group-structure mismatch:', { activeId, usedGroupStructureId });
   }
 

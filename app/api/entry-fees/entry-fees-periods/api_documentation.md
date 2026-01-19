@@ -40,15 +40,15 @@ BASE="https://bff-subscriptions-tests.vercel.app"
 
 ## 📌 Règles métier (ultra-concis)
 
-* Une période couvre l’intervalle **`[start_date, end_date)`**
+* Une période couvre l’intervalle **`[start_date, end_date]`**
 
   * `start_date` inclus
-  * `end_date` exclusif
-* Validation API : `start_date < end_date`
+  * `end_date` inclusif
+* Validation API : `start_date <= end_date`
 * Anti-overlap : garanti par **Postgres (GiST / EXCLUDE)**
 * Erreurs attendues :
 
-  * `400` : dates invalides / `start_date >= end_date` / batch invalide
+  * `400` : dates invalides / `start_date > end_date` / batch invalide
   * `404` : période inconnue / resolve sans match / update batch sur id inconnu
   * `409` : overlap ou doublon exact
   * `204` : période supprimée avec succès
@@ -112,7 +112,7 @@ curl -s "$BASE/api/entry-fees/entry-fees-periods" | jq .
 
 ### 2) Lister avec filtre d’intervalle
 
-> Retourne les périodes qui **intersectent** `[from, to)`
+> Retourne les périodes qui **intersectent** `[from, to]`
 
 ```bash
 curl -s "$BASE/api/entry-fees/entry-fees-periods?from=2026-01-10&to=2026-02-10" | jq .
@@ -145,7 +145,7 @@ curl -s "$BASE/api/entry-fees/entry-fees-periods/resolve?date=2026-01-20" | jq .
 ```bash
 curl -s -X POST "$BASE/api/entry-fees/entry-fees-periods" \
   -H "Content-Type: application/json" \
-  -d '{"start_date":"2026-03-01","end_date":"2026-04-01"}' | jq .
+  -d '{"start_date":"2026-03-01","end_date":"2026-03-31"}' | jq .
 ```
 
 ### 7) Back-to-back (doit PASSER)
@@ -153,7 +153,7 @@ curl -s -X POST "$BASE/api/entry-fees/entry-fees-periods" \
 ```bash
 curl -s -X POST "$BASE/api/entry-fees/entry-fees-periods" \
   -H "Content-Type: application/json" \
-  -d '{"start_date":"2026-04-01","end_date":"2026-05-01"}' | jq .
+  -d '{"start_date":"2026-04-01","end_date":"2026-04-30"}' | jq .
 ```
 
 ### 8) Overlap (doit FAIL — 409)
@@ -282,20 +282,21 @@ En cas d’erreur (ex: overlap) :
 Une date `D` appartient à une période `P` si :
 
 ```
-P.start_date <= D < P.end_date
+P.start_date <= D <= P.end_date
 ```
 
 Exemples :
 
 * `date=2026-02-01` → période commençant le `2026-02-01`
-* `date=end_date` → ❌ hors période (fin exclusive)
+* `date=end_date` → ✅ dans la période (fin inclusive)
 
 ---
 
 ## 📌 Notes DB (Neon / Postgres)
 
-* CHECK : `start_date < end_date`
+* CHECK : `start_date < end_date` (stockage DB en fin exclusive)
 * Anti-overlap : contrainte **GiST / EXCLUDE** sur `daterange(start_date, end_date, '[)')`
+* API : `end_date` **inclusif** → stocké en DB comme `end_date + 1 jour`
 * Les overlaps et doublons exacts déclenchent une erreur SQLSTATE `23P01` → `409 Conflict`
 
 

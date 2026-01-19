@@ -68,9 +68,9 @@ export async function PUT(req: NextRequest, context: Ctx) {
     const { start_date, end_date } = parsed.data;
 
     // Validation métier
-    if (start_date >= end_date) {
+    if (start_date > end_date) {
       return withCors(
-        NextResponse.json({ message: 'Invalid range: start_date must be < end_date' }, { status: 400 }),
+        NextResponse.json({ message: 'Invalid range: start_date must be <= end_date' }, { status: 400 }),
       );
     }
 

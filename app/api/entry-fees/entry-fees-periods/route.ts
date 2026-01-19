@@ -72,10 +72,10 @@ export async function POST(req: NextRequest) {
 
     const { start_date, end_date } = parsed.data;
 
-    // start_date < end_date (strict)
-    if (start_date >= end_date) {
+    // start_date <= end_date (inclusive)
+    if (start_date > end_date) {
       return withCors(
-        NextResponse.json({ message: 'Invalid range: start_date must be < end_date' }, { status: 400 }),
+        NextResponse.json({ message: 'Invalid range: start_date must be <= end_date' }, { status: 400 }),
       );
     }
 

@@ -1,1 +1,1 @@
-{"ok":false,"code":"PERIOD_NOT_FOUND","message":"Period not found","results":{"create":[],"update":[],"delete":[]},"errors":[{"op":"update","index":0,"code":"PERIOD_NOT_FOUND","message":"Period not found"}]}
+{"ok":true,"errors":[]}

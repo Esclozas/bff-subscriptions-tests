@@ -31,20 +31,20 @@ const BatchBodySchema = z
   })
   .superRefine((data, ctx) => {
     data.create.forEach((item, index) => {
-      if (item.start_date >= item.end_date) {
+      if (item.start_date > item.end_date) {
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
-          message: 'Invalid range: start_date must be < end_date',
+          message: 'Invalid range: start_date must be <= end_date',
           path: ['create', index, 'start_date'],
         });
       }
     });
 
     data.update.forEach((item, index) => {
-      if (item.start_date >= item.end_date) {
+      if (item.start_date > item.end_date) {
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
-          message: 'Invalid range: start_date must be < end_date',
+          message: 'Invalid range: start_date must be <= end_date',
           path: ['update', index, 'start_date'],
         });
       }

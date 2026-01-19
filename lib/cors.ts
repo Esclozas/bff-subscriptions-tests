@@ -13,6 +13,7 @@ export function withCors(res: NextResponse) {
 
 // Optionnel : pour les préflight OPTIONS
 export function handleOptions(req: NextRequest) {
+  void req;
   const res = new NextResponse(null, { status: 204 });
   return withCors(res);
 }

@@ -107,10 +107,6 @@ const SORTABLE_FIELDS = new Set([
   'validationDate',
 ]);
 
-type TextField = (typeof TEXT_FILTER_FIELDS)[number];
-type NumericField = (typeof NUMERIC_FILTER_FIELDS)[number];
-type BooleanField = (typeof BOOLEAN_FILTER_FIELDS)[number];
-
 /** Vérifie si l'URL contient un filtre global (texte/numérique/bool, min/max inclus) */
 function hasGlobalFilters(url: URL) {
   // Texte

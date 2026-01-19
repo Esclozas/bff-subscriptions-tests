@@ -31,7 +31,6 @@ async function q<T = any>(text: string, params: any[] = []) {
   return res.rows as T[];
 }
 
-const T_LIST = 'public.entry_fees_payment_list';
 const T_SUBS = 'public.entry_fees_payment_list_subscription';
 const T_TOTAL = 'public.entry_fees_payment_list_total';
 const T_EVENT = 'public.entry_fees_payment_list_event';
