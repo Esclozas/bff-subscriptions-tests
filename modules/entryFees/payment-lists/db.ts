@@ -64,6 +64,15 @@ export type PaymentListEventRow = {
   statement_id: string | null;
 };
 
+export type StatementAggRow = {
+  entry_fees_payment_list_id: string;
+  issue_status: string;
+  payment_status: string;
+  currency: string;
+  statements_count: number;
+  total_amount: string;
+};
+
 // ✅ listPaymentLists(): statements_count calculé
 export async function listPaymentLists(args: {
   from?: string | null;
@@ -183,6 +192,26 @@ export async function getPaymentListEvents(paymentListId: string) {
     ORDER BY created_at DESC
     `,
     [paymentListId],
+  );
+}
+
+export async function getStatementAggregatesByPaymentListIds(ids: string[]) {
+  if (!ids.length) return [] as StatementAggRow[];
+
+  return await q<StatementAggRow>(
+    `
+    SELECT
+      entry_fees_payment_list_id,
+      issue_status::text AS issue_status,
+      payment_status::text AS payment_status,
+      currency,
+      COUNT(*)::int AS statements_count,
+      COALESCE(SUM(total_amount), 0)::text AS total_amount
+    FROM public.entry_fees_statement
+    WHERE entry_fees_payment_list_id = ANY($1::uuid[])
+    GROUP BY entry_fees_payment_list_id, issue_status, payment_status, currency
+    `,
+    [ids],
   );
 }
 

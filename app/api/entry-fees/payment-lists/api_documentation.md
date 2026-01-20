@@ -107,6 +107,43 @@ curl -s "$BASE/api/entry-fees/payment-lists/summary?limit=5&cursor=2026-01-07T19
 
 ---
 
+## ✅ Statistiques des notices (summary)
+
+Chaque item de `GET /api/entry-fees/payment-lists/summary` inclut `statements_stats`.
+
+Règles :
+* `issued_*` = `issue_status=ISSUED`
+* `cancelled_*` = `issue_status=CANCELLED`
+* `issued_paid_*` = `ISSUED` + `PAID`
+* `issued_unpaid_*` = `ISSUED` + `UNPAID`
+* `cancelled_paid_*` = `CANCELLED` + `PAID`
+* `cancelled_unpaid_*` = `CANCELLED` + `UNPAID`
+
+Exemple :
+
+```json
+{
+  "statements_stats": {
+    "total_count": 12,
+    "issued_count": 10,
+    "cancelled_count": 2,
+    "issued_paid_count": 6,
+    "issued_unpaid_count": 4,
+    "cancelled_paid_count": 0,
+    "cancelled_unpaid_count": 2,
+    "total_amounts": [{ "currency": "EUR", "amount": "1200.00" }],
+    "issued_amounts": [{ "currency": "EUR", "amount": "1000.00" }],
+    "cancelled_amounts": [{ "currency": "EUR", "amount": "200.00" }],
+    "issued_paid_amounts": [{ "currency": "EUR", "amount": "600.00" }],
+    "issued_unpaid_amounts": [{ "currency": "EUR", "amount": "400.00" }],
+    "cancelled_paid_amounts": [{ "currency": "EUR", "amount": "0.00" }],
+    "cancelled_unpaid_amounts": [{ "currency": "EUR", "amount": "200.00" }]
+  }
+}
+```
+
+---
+
 ## 🚀 Créer un Payment List (ET les Statements)
 
 ### POST `/api/entry-fees/payment-lists`

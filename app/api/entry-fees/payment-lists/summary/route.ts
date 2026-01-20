@@ -2,7 +2,11 @@ export const runtime = 'nodejs';
 
 import { NextRequest, NextResponse } from 'next/server';
 import { withCors, handleOptions } from '@/lib/cors';
-import { listPaymentLists } from '@/modules/entryFees/payment-lists/db';
+import { getStatementAggregatesByPaymentListIds, listPaymentLists } from '@/modules/entryFees/payment-lists/db';
+import {
+  buildStatementStatsByPaymentList,
+  emptyStatementStats,
+} from '@/modules/entryFees/payment-lists/statements_stats';
 import { neon } from '@neondatabase/serverless';
 
 let _sql: ReturnType<typeof neon> | null = null;
@@ -52,7 +56,7 @@ export async function GET(req: NextRequest) {
     return withCors(NextResponse.json({ items: [], nextCursor: null }));
   }
 
-  // 2) Charger totals + aggregation events pour ces lots (en 2 queries)
+  // 2) Charger totals + aggregation events + stats statements pour ces lots
   const sql = getSql();
   const ids = items.map((x) => x.id);
 
@@ -72,6 +76,9 @@ export async function GET(req: NextRequest) {
     WHERE entry_fees_payment_list_id = ANY(${`{${ids.join(',')}}`}::uuid[])
     GROUP BY entry_fees_payment_list_id, currency
   `) as unknown as EventsAggRow[];
+
+  const statementAgg = await getStatementAggregatesByPaymentListIds(ids);
+  const statsByList = buildStatementStatsByPaymentList(statementAgg);
 
   // indexer par (paymentListId -> currency -> ...)
   const totalsByList = new Map<string, TotalsRow[]>();
@@ -112,6 +119,7 @@ export async function GET(req: NextRequest) {
       ...pl,
       totals: totalsSummary,
       events_count: totalsSummary.reduce((acc, x) => acc + (x.events_count ?? 0), 0),
+      statements_stats: statsByList.get(pl.id) ?? emptyStatementStats(),
     };
   });
 

@@ -7,7 +7,12 @@ import {
   getPaymentListSubscriptions,
   getPaymentListTotals,
   getPaymentListEvents,
+  getStatementAggregatesByPaymentListIds,
 } from '@/modules/entryFees/payment-lists/db';
+import {
+  buildStatementStatsByPaymentList,
+  emptyStatementStats,
+} from '@/modules/entryFees/payment-lists/statements_stats';
 
 type Ctx = { params: Promise<{ id: string }> };
 
@@ -17,10 +22,11 @@ export async function GET(req: NextRequest, context: Ctx) {
   const pl = await getPaymentList(id);
   if (!pl) return withCors(NextResponse.json({ message: 'Not Found', id }, { status: 404 }));
 
-  const [subs, totals, events] = await Promise.all([
+  const [subs, totals, events, statementAgg] = await Promise.all([
     getPaymentListSubscriptions(id),
     getPaymentListTotals(id),
     getPaymentListEvents(id),
+    getStatementAggregatesByPaymentListIds([id]),
   ]);
 
   const deltaByCur = new Map<string, number>();
@@ -42,12 +48,16 @@ export async function GET(req: NextRequest, context: Ctx) {
     };
   });
 
+  const statsByList = buildStatementStatsByPaymentList(statementAgg);
+  const statements_stats = statsByList.get(id) ?? emptyStatementStats();
+
   return withCors(
     NextResponse.json({
       paymentList: pl,
       subscriptions_count: subs.length,
       totals: totalsSummary,
       events_count: events.length,
+      statements_stats,
     }),
   );
 }
