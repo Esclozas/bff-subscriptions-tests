@@ -94,6 +94,7 @@ Ces APIs sont appelées **automatiquement côté backend** lors de la création 
 | --------- | ---------------------------- |
 | `limit`   | max 200                      |
 | `cursor`  | `created_at` du dernier item |
+| `includeStatementsMin` | `true` → ajoute `statements_min` (ids + statuts) |
 
 ```bash
 curl -s "$BASE/api/entry-fees/payment-lists/summary?limit=5" | jq .
@@ -141,6 +142,25 @@ Exemple :
   }
 }
 ```
+
+---
+
+## ✅ Statements minimaux (summary léger)
+
+Si `includeStatementsMin=true`, chaque item contient :
+
+```json
+"statements_min": [
+  { "id": "st_001", "issue_status": "ISSUED", "payment_status": "PAID" },
+  { "id": "st_002", "issue_status": "ISSUED", "payment_status": "UNPAID" },
+  { "id": "st_003", "issue_status": "CANCELLED", "payment_status": "UNPAID" }
+]
+```
+
+Usage côté front :
+* sélectionner uniquement `issue_status=ISSUED`
+* ignorer `CANCELLED`
+* utiliser les `id` pour les actions batch (paid / unpaid / cancel)
 
 ---
 

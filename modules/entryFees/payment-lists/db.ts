@@ -73,6 +73,13 @@ export type StatementAggRow = {
   total_amount: string;
 };
 
+export type StatementMinRow = {
+  entry_fees_payment_list_id: string;
+  id: string;
+  issue_status: string;
+  payment_status: string;
+};
+
 // ✅ listPaymentLists(): statements_count calculé
 export async function listPaymentLists(args: {
   from?: string | null;
@@ -121,6 +128,33 @@ export async function listPaymentLists(args: {
   const nextCursor = rows.length ? rows[rows.length - 1]!.created_at : null;
 
   return { items: rows as PaymentListRow[], nextCursor };
+}
+
+export async function countPaymentLists(args: {
+  from?: string | null;
+  to?: string | null;
+  created_by?: string | null;
+  group_structure_id?: string | null;
+}) {
+  const pool = getPool();
+  const countQuery = `
+    SELECT COUNT(*)::int AS total
+    FROM public.entry_fees_payment_list pl
+    WHERE
+      ($1::timestamptz IS NULL OR pl.created_at >= $1::timestamptz)
+      AND ($2::timestamptz IS NULL OR pl.created_at <= $2::timestamptz)
+      AND ($3::text IS NULL OR pl.created_by = $3::text)
+      AND ($4::uuid IS NULL OR pl.group_structure_id = $4::uuid)
+  `;
+
+  const { rows } = await pool.query(countQuery, [
+    args.from ?? null,
+    args.to ?? null,
+    args.created_by ?? null,
+    args.group_structure_id ?? null,
+  ]);
+
+  return Number(rows[0]?.total ?? 0);
 }
 
 
@@ -210,6 +244,24 @@ export async function getStatementAggregatesByPaymentListIds(ids: string[]) {
     FROM public.entry_fees_statement
     WHERE entry_fees_payment_list_id = ANY($1::uuid[])
     GROUP BY entry_fees_payment_list_id, issue_status, payment_status, currency
+    `,
+    [ids],
+  );
+}
+
+export async function getStatementsMinByPaymentListIds(ids: string[]) {
+  if (!ids.length) return [] as StatementMinRow[];
+
+  return await q<StatementMinRow>(
+    `
+    SELECT
+      entry_fees_payment_list_id,
+      id,
+      issue_status::text AS issue_status,
+      payment_status::text AS payment_status
+    FROM public.entry_fees_statement
+    WHERE entry_fees_payment_list_id = ANY($1::uuid[])
+    ORDER BY entry_fees_payment_list_id, created_at ASC
     `,
     [ids],
   );

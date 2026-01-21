@@ -2,7 +2,12 @@ export const runtime = 'nodejs';
 
 import { NextRequest, NextResponse } from 'next/server';
 import { withCors, handleOptions } from '@/lib/cors';
-import { getStatementAggregatesByPaymentListIds, listPaymentLists } from '@/modules/entryFees/payment-lists/db';
+import {
+  countPaymentLists,
+  getStatementAggregatesByPaymentListIds,
+  getStatementsMinByPaymentListIds,
+  listPaymentLists,
+} from '@/modules/entryFees/payment-lists/db';
 import {
   buildStatementStatsByPaymentList,
   emptyStatementStats,
@@ -42,18 +47,24 @@ export async function GET(req: NextRequest) {
   const to = url.searchParams.get('to');
   const created_by = url.searchParams.get('created_by');
   const group_structure_id = url.searchParams.get('group_structure_id');
+  const includeStatementsMin =
+    url.searchParams.get('includeStatementsMin') === 'true' ||
+    url.searchParams.get('includeStatementsMin') === '1';
 
-  const { items, nextCursor } = await listPaymentLists({
+  const [total, { items, nextCursor }] = await Promise.all([
+    countPaymentLists({ from, to, created_by, group_structure_id }),
+    listPaymentLists({
     from,
     to,
     created_by,
     group_structure_id,
     limit: Number.isFinite(limit) ? limit : 50,
     cursor,
-  });
+    }),
+  ]);
 
   if (!items.length) {
-    return withCors(NextResponse.json({ items: [], nextCursor: null }));
+    return withCors(NextResponse.json({ items: [], nextCursor: null, total }));
   }
 
   // 2) Charger totals + aggregation events + stats statements pour ces lots
@@ -79,6 +90,21 @@ export async function GET(req: NextRequest) {
 
   const statementAgg = await getStatementAggregatesByPaymentListIds(ids);
   const statsByList = buildStatementStatsByPaymentList(statementAgg);
+
+  const statementsMin = includeStatementsMin ? await getStatementsMinByPaymentListIds(ids) : [];
+  const statementsMinByList = new Map<
+    string,
+    Array<{ id: string; issue_status: string; payment_status: string }>
+  >();
+  for (const row of statementsMin) {
+    const arr = statementsMinByList.get(row.entry_fees_payment_list_id) ?? [];
+    arr.push({
+      id: row.id,
+      issue_status: row.issue_status,
+      payment_status: row.payment_status,
+    });
+    statementsMinByList.set(row.entry_fees_payment_list_id, arr);
+  }
 
   // indexer par (paymentListId -> currency -> ...)
   const totalsByList = new Map<string, TotalsRow[]>();
@@ -120,10 +146,13 @@ export async function GET(req: NextRequest) {
       totals: totalsSummary,
       events_count: totalsSummary.reduce((acc, x) => acc + (x.events_count ?? 0), 0),
       statements_stats: statsByList.get(pl.id) ?? emptyStatementStats(),
+      ...(includeStatementsMin
+        ? { statements_min: statementsMinByList.get(pl.id) ?? [] }
+        : {}),
     };
   });
 
-  return withCors(NextResponse.json({ items: enriched, nextCursor }));
+  return withCors(NextResponse.json({ items: enriched, nextCursor, total }));
 }
 
 export function OPTIONS(req: NextRequest) {
