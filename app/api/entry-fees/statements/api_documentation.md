@@ -30,6 +30,10 @@ BASE="http://localhost:3000"
 |     GET | /api/entry-fees/statements/:id               | Détail d’un statement                   |
 |     GET | /api/entry-fees/statements/:id/subscriptions | Lignes + infos souscription (live)      |
 |     GET | /api/entry-fees/statements/:id/summary       | Vue UI complète                         |
+|     GET | /api/entry-fees/statements/:id/notice        | JSON notice (Carbone)                   |
+|    POST | /api/entry-fees/statements/:id/notice/render | Génère PDF + upload storage             |
+|     GET | /api/entry-fees/statements/:id/notice/download | Téléchargement direct PDF             |
+|    POST | /api/entry-fees/statements/notices/download  | Batch download (URLs)                   |
 |     GET | /api/entry-fees/subscriptions/:id/statements | Historique des statements d’une souscription |
 |   PATCH | /api/entry-fees/statements/:id               | Changement de payment_status uniquement |
 |    POST | /api/entry-fees/statements/payment-status/batch | Changement payment_status en batch   |
@@ -121,6 +125,7 @@ Retour :
 ```json
 {
   "id": "uuid",
+  "group_structure_id": "uuid",
   "statement_number": "FR002",
   "issue_status": "ISSUED",
   "payment_status": "UNPAID",
@@ -197,6 +202,7 @@ Retour :
       "investor_first_name": "Jane",
       "fund_name": "Fund A",
       "product_name": "Product A",
+      "team_id": "uuid",
       "team_name": "Team A",
       "part_name": "Part A",
       "owner_full_name": "Owner Name",
@@ -241,6 +247,53 @@ Retour :
   }
 }
 ```
+
+---
+
+## 📌 Notice (Carbone)
+
+### GET `/api/entry-fees/statements/:id/notice`
+
+Retourne le JSON “notice” utilisé pour le template Carbone.
+
+```bash
+curl -s "$BASE/api/entry-fees/statements/{STATEMENT_ID}/notice" | jq .
+```
+
+### POST `/api/entry-fees/statements/:id/notice/render`
+
+Génère un PDF via Carbone, stocke dans Supabase et renvoie l’URL de preview.
+
+```bash
+curl -s -X POST "$BASE/api/entry-fees/statements/{STATEMENT_ID}/notice/render" \
+  -H "Content-Type: application/json" \
+  -d '{ "preview_expires_in": 3600 }' | jq .
+```
+
+### GET `/api/entry-fees/statements/:id/notice/download`
+
+Télécharge le PDF (génère + upload si besoin).
+
+```bash
+curl -s -OJ "$BASE/api/entry-fees/statements/{STATEMENT_ID}/notice/download"
+```
+
+### POST `/api/entry-fees/statements/notices/download`
+
+Batch : génère plusieurs PDFs et renvoie une liste d’URLs.
+
+```bash
+curl -s -X POST "$BASE/api/entry-fees/statements/notices/download" \
+  -H "Content-Type: application/json" \
+  -d '{ "statement_ids": ["uuid1","uuid2"], "preview_expires_in": 3600 }' | jq .
+```
+
+Notes :
+* `notice.status="FINAL"` pour les statements (les previews utilisent `DRAFT`)
+* si `SUPABASE_BUCKET_PUBLIC=true` → URL publique sans expiration
+* sinon → URL signée (expiration via `preview_expires_in` ou `SUPABASE_SIGNED_URL_EXPIRES`)
+* Carbone : si `CARBONE_TEMPLATE_VERSION_ID` est défini, il est utilisé en priorité (recommandé avec clés test)
+* Previews : bucket dédié via `SUPABASE_PREVIEW_BUCKET` + `SUPABASE_PREVIEW_BUCKET_PUBLIC`
 
 ---
 

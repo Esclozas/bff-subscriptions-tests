@@ -27,6 +27,7 @@ const T_EVENT = 'entry_fees_payment_list_event';
 export type StatementRow = {
   id: string;
   entry_fees_payment_list_id: string;
+  group_structure_id?: string | null;
   group_key: string;
   statement_number: string;
   issue_status: IssueStatus;
@@ -139,24 +140,27 @@ export async function getStatement(statementId: string) {
   const sql = getSql();
   const rows = (await sql`
     SELECT
-      id,
-      entry_fees_payment_list_id,
-      group_key,
-      statement_number,
-      issue_status,
-      payment_status,
-      currency,
-      total_amount,
-      created_at,
-      paid_at,
-      cancelled_at,
+      s.id,
+      s.entry_fees_payment_list_id,
+      pl.group_structure_id,
+      s.group_key,
+      s.statement_number,
+      s.issue_status,
+      s.payment_status,
+      s.currency,
+      s.total_amount,
+      s.created_at,
+      s.paid_at,
+      s.cancelled_at,
       (
         SELECT COUNT(*)::int
         FROM ${sql.unsafe(T_LINE)} ss
         WHERE ss.entry_fees_statement_id = s.id
       ) AS subscriptions_count
     FROM ${sql.unsafe(T_STATEMENT)} s
-    WHERE id = ${statementId}::uuid
+    LEFT JOIN public.entry_fees_payment_list pl
+      ON pl.id = s.entry_fees_payment_list_id
+    WHERE s.id = ${statementId}::uuid
     LIMIT 1
   `) as unknown as StatementRow[];
 
@@ -185,30 +189,33 @@ export async function getStatementLines(statementId: string) {
 export async function updateStatementPaymentStatus(statementId: string, newStatus: PaymentStatus) {
   const sql = getSql();
   const rows = (await sql`
-    UPDATE ${sql.unsafe(T_STATEMENT)}
+    UPDATE ${sql.unsafe(T_STATEMENT)} s
     SET payment_status = ${newStatus}::entry_fees_statement_payment_status_enum
       , paid_at = CASE
           WHEN ${newStatus}::entry_fees_statement_payment_status_enum = 'PAID'::entry_fees_statement_payment_status_enum
             THEN NOW()
           ELSE NULL
         END
-    WHERE id = ${statementId}::uuid
+    FROM public.entry_fees_payment_list pl
+    WHERE s.id = ${statementId}::uuid
+      AND pl.id = s.entry_fees_payment_list_id
     RETURNING
-      id,
-      entry_fees_payment_list_id,
-      group_key,
-      statement_number,
-      issue_status,
-      payment_status,
-      currency,
-      total_amount,
-      created_at,
-      paid_at,
-      cancelled_at,
+      s.id,
+      s.entry_fees_payment_list_id,
+      pl.group_structure_id,
+      s.group_key,
+      s.statement_number,
+      s.issue_status,
+      s.payment_status,
+      s.currency,
+      s.total_amount,
+      s.created_at,
+      s.paid_at,
+      s.cancelled_at,
       (
         SELECT COUNT(*)::int
         FROM ${sql.unsafe(T_LINE)} ss
-        WHERE ss.entry_fees_statement_id = id
+        WHERE ss.entry_fees_statement_id = s.id
       ) AS subscriptions_count
   `) as unknown as StatementRow[];
   return rows[0] ?? null;

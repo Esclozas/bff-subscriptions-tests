@@ -49,6 +49,7 @@ export async function GET(req: NextRequest, context: Ctx) {
       investor_first_name: sub?.investorFirstName ?? null,
       fund_name: sub?.fundName ?? null,
       product_name: sub?.productName ?? null,
+      team_id: sub?.teamId ?? null,
       team_name: sub?.teamName ?? null,
       part_name: sub?.partName ?? null,
       owner_full_name: sub?.ownerFullName ?? null,

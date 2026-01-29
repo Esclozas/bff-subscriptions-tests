@@ -73,6 +73,8 @@ Ces APIs sont appelées **automatiquement côté backend** lors de la création 
 | GET     | `/api/entry-fees/payment-lists/:id/events`        | Journal d’audit                                 |
 | POST    | `/api/entry-fees/payment-lists/:id/events`        | Ajout d’un event (annulation)                   |
 | GET     | `/api/entry-fees/payment-lists/:id/summary`       | Vue UI complète                                 |
+| POST    | `/api/entry-fees/payment-lists/notices/preview`   | Preview JSON notices (DRAFT)                    |
+| POST    | `/api/entry-fees/payment-lists/notices/preview/render` | Preview PDF notices (DRAFT)                |
 
 ---
 
@@ -177,6 +179,9 @@ Si les statements **ne peuvent pas être créés** →
 ❌ **le Payment List n’est PAS créé**
 
 Note :
+* Une seule création de Payment List peut générer **plusieurs statements** (1 par `(group_key, currency)`).
+
+Note :
 * Si un statement est créé avec `total_amount=0` (toutes lignes à 0), il est **auto‑marqué PAID** (`payment_status=PAID`, `paid_at=now()`).
 
 ### Payload
@@ -242,6 +247,50 @@ Pour **CHAQUE souscription** :
 * `currency` = `amountCurrency`
 
 ❌ fund / part / closing / investor **n’interviennent pas**
+
+---
+
+## 👀 Preview des notices (DRAFT)
+
+Permet de générer le JSON (ou le PDF) **avant** la création du Payment List / Statements.
+
+### POST `/api/entry-fees/payment-lists/notices/preview`
+
+```bash
+curl -s -X POST "$BASE/api/entry-fees/payment-lists/notices/preview" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "subscription_ids": ["uuid1", "uuid2"],
+    "group_structure_id": "uuid-optionnel",
+    "issue_date": "2024-05-19"
+  }' | jq .
+```
+
+Réponse :
+* `notice.status = "DRAFT"`
+* `notice.statementId = null`
+* `notice.paymentListId = null`
+
+### POST `/api/entry-fees/payment-lists/notices/preview/render`
+
+Génère le PDF via Carbone et stocke dans Supabase (bucket preview).
+
+```bash
+curl -s -X POST "$BASE/api/entry-fees/payment-lists/notices/preview/render" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "subscription_ids": ["uuid1", "uuid2"],
+    "group_structure_id": "uuid-optionnel",
+    "issue_date": "2024-05-19",
+    "preview_expires_in": 3600
+  }' | jq .
+```
+
+Notes :
+* `group_structure_id` est optionnel → si absent, la version active est utilisée.
+* Stockage preview : `SUPABASE_PREVIEW_BUCKET` (sinon fallback sur `SUPABASE_BUCKET`).
+* URL publique si `SUPABASE_PREVIEW_BUCKET_PUBLIC=true`, sinon URL signée.
+* Les fichiers preview sont stockés sous `previews/`.
 
 ---
 

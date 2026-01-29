@@ -129,6 +129,7 @@ Retourne le document financier figé.
 ```json
 {
   "id": "uuid",
+  "group_structure_id": "uuid",
   "statement_number": "FR002",
   "issue_status": "ISSUED",
   "payment_status": "UNPAID",
@@ -168,6 +169,7 @@ Retourne les **lignes figées** du statement + infos de souscription (live).
       "investor_first_name": "Jane",
       "fund_name": "Fund A",
       "product_name": "Product A",
+      "team_id": "uuid",
       "team_name": "Team A",
       "part_name": "Part A",
       "owner_full_name": "Owner Name",
@@ -215,7 +217,34 @@ Agrégation pratique pour l’UI (sans recalcul métier).
 
 ---
 
-## 5. Modifier le payment_status d’un statement
+## 5. Notice (Carbone)
+
+### `GET /api/entry-fees/statements/{statementId}/notice`
+
+Retourne le JSON “notice” pour le template Carbone.
+
+### `POST /api/entry-fees/statements/{statementId}/notice/render`
+
+Génère un PDF via Carbone, stocke dans Supabase et renvoie l’URL de preview.
+
+### `GET /api/entry-fees/statements/{statementId}/notice/download`
+
+Téléchargement direct du PDF (génère + upload si besoin).
+
+### `POST /api/entry-fees/statements/notices/download`
+
+Batch : renvoie une liste d’URLs de PDFs générés.
+
+Notes :
+* `notice.status="FINAL"` pour les statements (les previews utilisent `DRAFT`)
+* si `SUPABASE_BUCKET_PUBLIC=true` → URL publique sans expiration
+* sinon → URL signée (expiration via `preview_expires_in` ou `SUPABASE_SIGNED_URL_EXPIRES`)
+* Carbone : si `CARBONE_TEMPLATE_VERSION_ID` est défini, il est utilisé en priorité (recommandé avec clés test)
+* Previews : bucket dédié via `SUPABASE_PREVIEW_BUCKET` + `SUPABASE_PREVIEW_BUCKET_PUBLIC`
+
+---
+
+## 6. Modifier le payment_status d’un statement
 
 ### `PATCH /api/entry-fees/statements/{statementId}`
 
@@ -248,7 +277,7 @@ Notes :
 
 ---
 
-## 6. Annuler un statement (action métier)
+## 7. Annuler un statement (action métier)
 
 ### `POST /api/entry-fees/statements/{statementId}/cancel`
 
