@@ -73,7 +73,7 @@ function computeBillingGroupKey(teamId: string, map: Map<string, string>) {
   return map.get(teamId) ?? teamId;
 }
 
-function getEntryFeesAmountAllowZero(sub: Flattened) {
+function getEntryFeesAmountAllowZero(sub: SubscriptionSnapshot) {
   const v = Number(sub.entry_fees_amount);
   if (!Number.isFinite(v) || v < 0) {
     throw badRequest('BAD_REQUEST_INVALID_ENTRY_FEES_AMOUNT', {
