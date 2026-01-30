@@ -195,7 +195,8 @@ Note :
   "subscriptions": ["uuid1", "uuid2"],
   "totals": [
     { "currency": "EUR", "announced_total": "300.00" }
-  ]
+  ],
+  "include_statements": true
 }
 ```
 
@@ -210,7 +211,8 @@ curl -s -X POST "$BASE/api/entry-fees/payment-lists" \
     "group_structure_id": "c15d3aa5-ac24-42da-98f7-1a12d341818d",
     "period_label": "2026-01",
     "subscriptions": ["000c30e1-e155-49cb-869a-7b01337a3f6e"],
-    "totals": [{ "currency": "EUR", "announced_total": "300.00" }]
+    "totals": [{ "currency": "EUR", "announced_total": "300.00" }],
+    "include_statements": true
   }' | jq .
 ```
 
@@ -220,9 +222,26 @@ Réponse :
 {
   "id": "payment_list_id",
   "subscriptions_count": 1,
-  "statements_count": 1
+  "statements_count": 1,
+  "statements": [
+    {
+      "id": "statement_id",
+      "entry_fees_payment_list_id": "payment_list_id",
+      "group_key": "uuid",
+      "statement_number": "PL-xxxx-EUR-1",
+      "issue_status": "ISSUED",
+      "payment_status": "UNPAID",
+      "currency": "EUR",
+      "total_amount": "400.00",
+      "created_at": "2026-01-30T10:13:00.000Z"
+    }
+  ]
 }
 ```
+
+Notes :
+* `include_statements` est optionnel (par défaut `false`).
+* Si `true`, les statements créés sont renvoyés directement → évite un appel supplémentaire.
 
 Notes :
 * `payment_list_id` est optionnel.
@@ -365,6 +384,62 @@ PL_ID="payment_list_id"
 
 curl -s "$BASE/api/entry-fees/payment-lists/$PL_ID/statements" | jq .
 ```
+
+---
+
+## ✅ Émettre les notices (process front recommandé)
+
+Objectif : créer la payment list + statements puis générer les PDFs **avec progression** côté UI.
+
+### Étape 1 — Créer la payment list
+
+```bash
+curl -s -X POST "$BASE/api/entry-fees/payment-lists" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "payment_list_id": "UUID_GENERÉ_FRONT",
+    "created_by": "user_test",
+    "group_structure_id": "uuid",
+    "subscriptions": ["uuid1","uuid2"],
+    "compute_totals": true
+  }' | jq .
+```
+
+UI : “Création de la payment list…”
+
+---
+
+### Étape 2 — Lister les statements
+
+```bash
+curl -s "$BASE/api/entry-fees/payment-lists/$PL_ID/statements" | jq .
+```
+
+UI : “Création des statements…”
+
+---
+
+### Étape 3 — Générer les PDFs avec progression (1 par 1)
+
+```bash
+STATEMENT_ID="uuid"
+curl -s -X POST "$BASE/api/entry-fees/statements/$STATEMENT_ID/notice/render" \
+  -H "Content-Type: application/json" \
+  -d '{ "preview_expires_in": 3600 }' | jq .
+```
+
+UI : “Génération des PDFs… 3 / N”
+
+---
+
+### Étape 4 — Terminé
+
+UI : “Notices émises ✅”
+
+---
+
+⚠️ Remarque : `POST /payment-lists` **ne génère pas** les PDFs automatiquement.  
+Il faut appeler `.../notice/render` pour chaque statement.
 
 ---
 

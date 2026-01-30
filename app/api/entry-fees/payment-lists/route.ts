@@ -38,6 +38,9 @@ const CreateBodySchema = z.object({
 
   // style B
   compute_totals: z.boolean().optional(),
+
+  // Optionnel: renvoyer les statements créés dans la réponse
+  include_statements: z.boolean().optional(),
 });
 
 export async function GET(req: NextRequest) {
@@ -156,14 +159,17 @@ export async function POST(req: NextRequest) {
     if (!pl?.id) throw new Error('DB_FAILURE_PAYMENT_LIST_NOT_CREATED');
 
     // 2) génère les statements (dans la MÊME transaction)
-    await generateStatementsAtomicTx(client, {
+    const statementsRes = await generateStatementsAtomicTx(client, {
         origin: req.nextUrl.origin,
         paymentListId: pl.id,
         groupStructureId: pl.group_structure_id,
         subscriptionIds: body.subscriptions,
     });
 
-    return pl;
+    return {
+      ...pl,
+      ...(body.include_statements ? { statements: statementsRes.items ?? [] } : {}),
+    };
     });
 
     return withCors(NextResponse.json(created, { status: 201 }));
