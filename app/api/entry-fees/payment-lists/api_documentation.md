@@ -286,6 +286,14 @@ Champs utiles pour l’UI :
 * `investorName`, `validationDate`
 * `teamName`
 
+⚡ Optimisation automatique :
+* Si **tous** les snapshots ont `teamName`, l’API **ne fait pas** d’appel à `/api/teams/all`.
+* Dans ce cas, si un **mapping** est utilisé (parent ≠ source), le `distributor.name` peut rester `null`
+  car le nom du parent n’est pas connu côté front.
+
+⚡ Option explicite :
+* `skip_team_lookup: true` → force le skip de `/api/teams/all` même si `teamName` est absent.
+
 ```bash
 curl -s -X POST "$BASE/api/entry-fees/payment-lists/notices/preview" \
   -H "Content-Type: application/json" \

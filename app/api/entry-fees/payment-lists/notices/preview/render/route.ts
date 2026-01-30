@@ -31,6 +31,7 @@ const BodySchema = z.object({
   subscription_snapshots: z.array(SnapshotSchema).min(1).max(500),
   group_structure_id: z.string().uuid().optional(),
   payment_list_id: z.string().uuid().optional(),
+  skip_team_lookup: z.boolean().optional(),
   issue_date: z.string().optional(),
   preview_expires_in: z.number().int().positive().optional(),
 });
@@ -53,6 +54,7 @@ export async function POST(req: NextRequest) {
       subscriptionSnapshots: parsed.data.subscription_snapshots,
       groupStructureId: parsed.data.group_structure_id ?? null,
       paymentListId: parsed.data.payment_list_id ?? null,
+      skipTeamLookup: parsed.data.skip_team_lookup ?? false,
       issueDate: parsed.data.issue_date ?? null,
     });
 

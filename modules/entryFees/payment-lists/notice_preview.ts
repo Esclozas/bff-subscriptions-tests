@@ -1,5 +1,5 @@
-import { getActiveGroupStructure, getGroupStructureMap } from '@/modules/grouping/db';
-import { fetchAllTeamsFromReq, indexTeamsById } from '@/modules/teams/client';
+import { getActiveGroupStructure, getGroupStructureMap, type MappingRow } from '@/modules/grouping/db';
+import { fetchAllTeamsFromReq, indexTeamsById, type Team } from '@/modules/teams/client';
 import type { FundPartGroup, StatementNotice } from '@/modules/entryFees/Statements/notice';
 import { buildStatementNumber, sortStatementGroups } from './statement_number';
 
@@ -7,6 +7,7 @@ type DraftNoticesArgs = {
   subscriptionSnapshots: SubscriptionSnapshot[];
   groupStructureId?: string | null;
   paymentListId?: string | null;
+  skipTeamLookup?: boolean;
   issueDate?: string | null;
 };
 
@@ -39,6 +40,32 @@ type SubscriptionSnapshot = {
   investorName?: string | null;
   validationDate?: string | null;
 };
+
+const CACHE_TTL_MS = 60_000;
+const groupMapCache = new Map<string, { value: MappingRow[]; expiresAt: number }>();
+let teamsCache: { value: Team[]; expiresAt: number } | null = null;
+
+function isFresh(expiresAt: number) {
+  return expiresAt > Date.now();
+}
+
+async function getCachedGroupStructureMap(groupStructureId: string) {
+  const cached = groupMapCache.get(groupStructureId);
+  if (cached && isFresh(cached.expiresAt)) return cached.value;
+
+  const value = await getGroupStructureMap(groupStructureId).catch(() => []);
+  groupMapCache.set(groupStructureId, { value, expiresAt: Date.now() + CACHE_TTL_MS });
+  return value;
+}
+
+async function getCachedTeams(req: Request, skip: boolean) {
+  if (skip) return [] as Team[];
+  if (teamsCache && isFresh(teamsCache.expiresAt)) return teamsCache.value;
+
+  const value = await fetchAllTeamsFromReq(req).catch(() => []);
+  teamsCache = { value, expiresAt: Date.now() + CACHE_TTL_MS };
+  return value;
+}
 
 function badRequest(message: string, details?: Record<string, unknown>) {
   const err = new Error(message);
@@ -112,7 +139,7 @@ export async function buildDraftNotices(req: Request, args: DraftNoticesArgs): P
   }
 
   const groupStructureId = active.id;
-  const mappings = await getGroupStructureMap(groupStructureId).catch(() => []);
+  const mappings = await getCachedGroupStructureMap(groupStructureId);
   const billingBySource = new Map<string, string>();
   for (const m of mappings) {
     if (m?.source_group_id && m?.billing_group_id) {
@@ -120,7 +147,11 @@ export async function buildDraftNotices(req: Request, args: DraftNoticesArgs): P
     }
   }
 
-  const teams = await fetchAllTeamsFromReq(req).catch(() => []);
+  const hasTeamNames = snapshots.every(
+    (s) => typeof s.teamName === 'string' && s.teamName.trim().length > 0,
+  );
+  const skipTeams = args.skipTeamLookup === true || hasTeamNames;
+  const teams = await getCachedTeams(req, skipTeams);
   const teamsById = indexTeamsById(teams);
 
   const groups = new Map<string, DraftNoticeGroup>();
@@ -245,7 +276,7 @@ export async function buildDraftNotices(req: Request, args: DraftNoticesArgs): P
       let resolvedBy: StatementNotice['distributor']['resolvedBy'] =
         group.mappingUsed ? 'group_structure_map' : 'fallback_source_group';
 
-      if (!distributorName && sourceGroup?.name) {
+      if (!distributorName && sourceGroup?.name && !group.mappingUsed) {
         distributorName = sourceGroup.name;
         resolvedBy = 'fallback_source_group';
       }
