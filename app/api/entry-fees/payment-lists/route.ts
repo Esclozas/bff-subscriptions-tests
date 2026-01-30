@@ -17,6 +17,7 @@ function cookieHeaderFrom(req: NextRequest) {
 }
 
 const CreateBodySchema = z.object({
+  payment_list_id: z.string().uuid().optional(),
   created_by: z.string().min(1),
   group_structure_id: z.string().uuid(),
   period_label: z.string().nullable().optional(),
@@ -139,6 +140,7 @@ export async function POST(req: NextRequest) {
 
     // 1) crée le payment list + subs + totals (dans la transaction)
     const pl = await createPaymentListAtomicTx(client, {
+        id: body.payment_list_id,
         created_by: body.created_by,
         group_structure_id: body.group_structure_id,
         period_label: body.period_label ?? null,
@@ -169,6 +171,7 @@ export async function POST(req: NextRequest) {
 
   } catch (err: any) {
     const msg = String(err?.message ?? err);
+    const code = String(err?.code ?? err?._pgcode ?? '').toUpperCase();
 
     if (msg.startsWith('CONFLICT_SUB_ALREADY_ASSIGNED')) {
       return withCors(
@@ -177,6 +180,15 @@ export async function POST(req: NextRequest) {
             message: 'Subscriptions already assigned to a non-cancelled statement',
             detail: msg,
           },
+          { status: 409 },
+        ),
+      );
+    }
+
+    if (code === '23505') {
+      return withCors(
+        NextResponse.json(
+          { message: 'Payment list id already exists', detail: msg },
           { status: 409 },
         ),
       );

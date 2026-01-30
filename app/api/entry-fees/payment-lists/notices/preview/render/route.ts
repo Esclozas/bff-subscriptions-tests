@@ -13,9 +13,24 @@ import {
   uploadPdf,
 } from '@/modules/supabase/storage';
 
+const SnapshotSchema = z.object({
+  subscriptionId: z.string().uuid(),
+  teamId: z.string().uuid().nullable(),
+  teamName: z.string().nullable().optional(),
+  amountCurrency: z.string().nullable(),
+  entry_fees_amount: z.coerce.number().nullable(),
+  fundId: z.string().uuid().nullable().optional(),
+  fundName: z.string().nullable().optional(),
+  partId: z.string().uuid().nullable().optional(),
+  partName: z.string().nullable().optional(),
+  investorName: z.string().nullable().optional(),
+  validationDate: z.string().nullable().optional(),
+});
+
 const BodySchema = z.object({
-  subscription_ids: z.array(z.string().uuid()).min(1).max(500),
+  subscription_snapshots: z.array(SnapshotSchema).min(1).max(500),
   group_structure_id: z.string().uuid().optional(),
+  payment_list_id: z.string().uuid().optional(),
   issue_date: z.string().optional(),
   preview_expires_in: z.number().int().positive().optional(),
 });
@@ -34,9 +49,10 @@ export async function POST(req: NextRequest) {
       parsed.data.preview_expires_in ??
       Number(process.env.SUPABASE_SIGNED_URL_EXPIRES ?? 3600);
 
-    const { notices, groupStructureId } = await buildDraftNotices(req, {
-      subscriptionIds: parsed.data.subscription_ids,
+    const { notices, groupStructureId, paymentListId } = await buildDraftNotices(req, {
+      subscriptionSnapshots: parsed.data.subscription_snapshots,
       groupStructureId: parsed.data.group_structure_id ?? null,
+      paymentListId: parsed.data.payment_list_id ?? null,
       issueDate: parsed.data.issue_date ?? null,
     });
 
@@ -90,6 +106,7 @@ export async function POST(req: NextRequest) {
     return withCors(
       NextResponse.json({
         group_structure_id: groupStructureId,
+        payment_list_id: paymentListId,
         notices: results,
         public: usePublicUrl,
       }),

@@ -1,4 +1,5 @@
 import { createStatementsAndLinesTx } from './statements_db';
+import { buildStatementNumber, sortStatementGroups } from './statement_number';
 
 type FlattenedSub = {
   subscriptionId: string | null;
@@ -136,15 +137,13 @@ export async function generateStatementsAtomicTx(
     groupMap.set(key, g);
   }
 
-  const statements = Array.from(groupMap.values()).map((g, idx) => {
-    const short = args.paymentListId.slice(0, 8);
-    return {
-      group_key: g.group_key,
-      currency: g.currency,
-      statement_number: `PL-${short}-${g.currency}-${idx + 1}`,
-      total_amount: g.total.toFixed(2),
-    };
-  });
+  const sortedGroups = sortStatementGroups(Array.from(groupMap.values()));
+  const statements = sortedGroups.map((g, idx) => ({
+    group_key: g.group_key,
+    currency: g.currency,
+    statement_number: buildStatementNumber(args.paymentListId, g.currency, idx),
+    total_amount: g.total.toFixed(2),
+  }));
 
   // 5) insert DB atomique avec le MEME client
   return createStatementsAndLinesTx(client, {

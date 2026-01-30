@@ -1,17 +1,18 @@
-import type { Flattened } from '@/modules/subscriptions/flatten';
-import { loadAllFlattenedSubscriptions } from '@/modules/subscriptions/subscriptions';
 import { getActiveGroupStructure, getGroupStructureMap } from '@/modules/grouping/db';
 import { fetchAllTeamsFromReq, indexTeamsById } from '@/modules/teams/client';
 import type { FundPartGroup, StatementNotice } from '@/modules/entryFees/Statements/notice';
+import { buildStatementNumber, sortStatementGroups } from './statement_number';
 
 type DraftNoticesArgs = {
-  subscriptionIds: string[];
+  subscriptionSnapshots: SubscriptionSnapshot[];
   groupStructureId?: string | null;
+  paymentListId?: string | null;
   issueDate?: string | null;
 };
 
 type DraftNoticesResult = {
   groupStructureId: string;
+  paymentListId: string | null;
   notices: StatementNotice[];
 };
 
@@ -25,19 +26,24 @@ type DraftNoticeGroup = {
   mappingUsed: boolean;
 };
 
+type SubscriptionSnapshot = {
+  subscriptionId: string;
+  amountCurrency: string | null;
+  teamId: string | null;
+  teamName?: string | null;
+  entry_fees_amount: number | string | null;
+  fundId?: string | null;
+  fundName?: string | null;
+  partId?: string | null;
+  partName?: string | null;
+  investorName?: string | null;
+  validationDate?: string | null;
+};
+
 function badRequest(message: string, details?: Record<string, unknown>) {
   const err = new Error(message);
   (err as any).details = details;
   return err;
-}
-
-function cookieHeaderFrom(req: Request) {
-  const incoming = req.headers.get('cookie') ?? '';
-  if (incoming) return incoming;
-  if (process.env.UPSTREAM_ACCESS_TOKEN) {
-    return `accessToken=${process.env.UPSTREAM_ACCESS_TOKEN}`;
-  }
-  return '';
 }
 
 function toAmountNumber(value: string | number | null | undefined) {
@@ -85,22 +91,17 @@ function buildDraftNoticeNumber(groupKey: string, currency: string, index: numbe
 }
 
 export async function buildDraftNotices(req: Request, args: DraftNoticesArgs): Promise<DraftNoticesResult> {
-  const cookie = cookieHeaderFrom(req);
-  const flattened = await loadAllFlattenedSubscriptions(cookie);
-
-  const wanted = Array.from(new Set(args.subscriptionIds));
-  const subsById = new Map(
-    flattened
-      .filter((s) => typeof s.subscriptionId === 'string' && s.subscriptionId)
-      .map((s) => [s.subscriptionId as string, s]),
-  );
-
-  const missing = wanted.filter((id) => !subsById.has(id));
-  if (missing.length) {
-    throw badRequest('BAD_REQUEST_SUBSCRIPTIONS_NOT_FOUND', {
-      missing_subscription_ids: missing,
-    });
+  const snapshots = Array.isArray(args.subscriptionSnapshots) ? args.subscriptionSnapshots : [];
+  if (!snapshots.length) {
+    throw badRequest('BAD_REQUEST_SUBSCRIPTIONS_MISSING');
   }
+
+  const subsById = new Map(
+    snapshots
+      .filter((s) => typeof s.subscriptionId === 'string' && s.subscriptionId)
+      .map((s) => [s.subscriptionId, s]),
+  );
+  const wanted = Array.from(new Set(subsById.keys()));
 
   const active = args.groupStructureId
     ? { id: args.groupStructureId }
@@ -196,38 +197,37 @@ export async function buildDraftNotices(req: Request, args: DraftNoticesArgs): P
     groups.set(groupIndex, group);
   }
 
-  const notices = Array.from(groups.values())
-    .sort(
-      (a, b) =>
-        a.groupKey.localeCompare(b.groupKey) ||
-        a.currency.localeCompare(b.currency),
-    )
-    .map((group, index) => {
-      const fundParts = Array.from(group.fundParts.values())
-        .map((g) => ({
-          fundId: g.fundId,
-          fundName: g.fundName,
-          partId: g.partId,
-          partName: g.partName,
-          isin: g.isin,
-          totals: {
-            entryFeesTotal: g._total.toFixed(2),
-            subscriptionsCount: g.totals.subscriptionsCount,
-          },
-          subscriptions: g.subscriptions,
-        }))
-        .sort(
-          (a, b) =>
-            (a.fundName ?? '').localeCompare(b.fundName ?? '') ||
-            (a.partName ?? '').localeCompare(b.partName ?? ''),
-        );
+  const sortedGroups = sortStatementGroups(
+    Array.from(groups.values()).map((group) => ({
+      group_key: group.groupKey,
+      currency: group.currency,
+      ref: group,
+    })),
+  ).map((g) => g.ref);
 
-      const noticeNumber = buildDraftNoticeNumber(
-        group.groupKey,
-        group.currency,
-        index,
-        issueDate,
+  const notices = sortedGroups.map((group, index) => {
+    const fundParts = Array.from(group.fundParts.values())
+      .map((g) => ({
+        fundId: g.fundId,
+        fundName: g.fundName,
+        partId: g.partId,
+        partName: g.partName,
+        isin: g.isin,
+        totals: {
+          entryFeesTotal: g._total.toFixed(2),
+          subscriptionsCount: g.totals.subscriptionsCount,
+        },
+        subscriptions: g.subscriptions,
+      }))
+      .sort(
+        (a, b) =>
+          (a.fundName ?? '').localeCompare(b.fundName ?? '') ||
+          (a.partName ?? '').localeCompare(b.partName ?? ''),
       );
+
+    const noticeNumber = args.paymentListId
+      ? buildStatementNumber(args.paymentListId, group.currency, index)
+      : buildDraftNoticeNumber(group.groupKey, group.currency, index, issueDate);
 
       let sourceGroup = group.sourceGroup;
       if (sourceGroup?.id) {
@@ -250,32 +250,32 @@ export async function buildDraftNotices(req: Request, args: DraftNoticesArgs): P
         resolvedBy = 'fallback_source_group';
       }
 
-      return {
-        notice: {
-          statementId: null,
-          paymentListId: null,
-          number: noticeNumber,
-          issueDate,
-          currency: group.currency,
-          groupKey: group.groupKey,
-          groupStructureId,
-          issueStatus: null,
-          paymentStatus: null,
-          status: 'DRAFT',
-          totals: {
-            entryFeesTotal: group.total.toFixed(2),
-            subscriptionsCount: group.subscriptionsCount,
-          },
+    return {
+      notice: {
+        statementId: null,
+        paymentListId: args.paymentListId ?? null,
+        number: noticeNumber,
+        issueDate,
+        currency: group.currency,
+        groupKey: group.groupKey,
+        groupStructureId,
+        issueStatus: null,
+        paymentStatus: null,
+        status: 'DRAFT',
+        totals: {
+          entryFeesTotal: group.total.toFixed(2),
+          subscriptionsCount: group.subscriptionsCount,
         },
-        distributor: {
-          id: distributorId,
-          name: distributorName,
-          resolvedBy,
-          sourceGroup,
-        },
-        fundParts,
-      } satisfies StatementNotice;
-    });
+      },
+      distributor: {
+        id: distributorId,
+        name: distributorName,
+        resolvedBy,
+        sourceGroup,
+      },
+      fundParts,
+    } satisfies StatementNotice;
+  });
 
-  return { groupStructureId, notices };
+  return { groupStructureId, paymentListId: args.paymentListId ?? null, notices };
 }

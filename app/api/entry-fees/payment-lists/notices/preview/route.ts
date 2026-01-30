@@ -5,9 +5,24 @@ import { z } from 'zod';
 import { withCors, handleOptions } from '@/lib/cors';
 import { buildDraftNotices } from '@/modules/entryFees/payment-lists/notice_preview';
 
+const SnapshotSchema = z.object({
+  subscriptionId: z.string().uuid(),
+  teamId: z.string().uuid().nullable(),
+  teamName: z.string().nullable().optional(),
+  amountCurrency: z.string().nullable(),
+  entry_fees_amount: z.coerce.number().nullable(),
+  fundId: z.string().uuid().nullable().optional(),
+  fundName: z.string().nullable().optional(),
+  partId: z.string().uuid().nullable().optional(),
+  partName: z.string().nullable().optional(),
+  investorName: z.string().nullable().optional(),
+  validationDate: z.string().nullable().optional(),
+});
+
 const BodySchema = z.object({
-  subscription_ids: z.array(z.string().uuid()).min(1).max(500),
+  subscription_snapshots: z.array(SnapshotSchema).min(1).max(500),
   group_structure_id: z.string().uuid().optional(),
+  payment_list_id: z.string().uuid().optional(),
   issue_date: z.string().optional(),
 });
 
@@ -21,15 +36,17 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const { notices, groupStructureId } = await buildDraftNotices(req, {
-      subscriptionIds: parsed.data.subscription_ids,
+    const { notices, groupStructureId, paymentListId } = await buildDraftNotices(req, {
+      subscriptionSnapshots: parsed.data.subscription_snapshots,
       groupStructureId: parsed.data.group_structure_id ?? null,
+      paymentListId: parsed.data.payment_list_id ?? null,
       issueDate: parsed.data.issue_date ?? null,
     });
 
     return withCors(
       NextResponse.json({
         group_structure_id: groupStructureId,
+        payment_list_id: paymentListId,
         notices,
       }),
     );

@@ -298,6 +298,7 @@ export async function insertPaymentListEvent(args: {
 export async function createPaymentListAtomicTx(
   client: any,
   args: {
+    id?: string;
     created_by: string;
     group_structure_id: string;
     period_label?: string | null;
@@ -323,7 +324,45 @@ export async function createPaymentListAtomicTx(
     })),
   );
 
-  const qtext = `
+  const hasId = !!args.id;
+  const qtext = hasId
+    ? `
+    WITH pl AS (
+      INSERT INTO public.entry_fees_payment_list (
+        id, created_by, group_structure_id, period_label, subscriptions_count, statements_count
+      )
+      VALUES ($1::uuid, $2, $3::uuid, $4, $5, 0)
+      RETURNING id, created_at, created_by, group_structure_id, period_label, subscriptions_count, statements_count
+    ),
+    ins_subs AS (
+      INSERT INTO public.entry_fees_payment_list_subscription (entry_fees_payment_list_id, subscription_id)
+      SELECT pl.id, s::uuid
+      FROM pl
+      CROSS JOIN UNNEST($6::uuid[]) AS s
+      RETURNING 1
+    ),
+    ins_totals AS (
+      INSERT INTO public.entry_fees_payment_list_total (
+        entry_fees_payment_list_id, currency, total_announced, statements_count, subscriptions_count
+      )
+      SELECT
+        pl.id,
+        t.currency,
+        (t.total_announced)::numeric,
+        t.statements_count,
+        t.subscriptions_count
+      FROM pl
+      CROSS JOIN jsonb_to_recordset($7::jsonb) AS t(
+        currency text,
+        total_announced text,
+        statements_count int,
+        subscriptions_count int
+      )
+      RETURNING 1
+    )
+    SELECT * FROM pl;
+  `
+    : `
     WITH pl AS (
       INSERT INTO public.entry_fees_payment_list (
         created_by, group_structure_id, period_label, subscriptions_count, statements_count
@@ -360,14 +399,26 @@ export async function createPaymentListAtomicTx(
     SELECT * FROM pl;
   `;
 
-  const res = await client.query(qtext, [
-    args.created_by,
-    args.group_structure_id,
-    args.period_label ?? null,
-    subscriptions.length,
-    subscriptions,
-    totalsJson,
-  ]);
+  const params = hasId
+    ? [
+        args.id,
+        args.created_by,
+        args.group_structure_id,
+        args.period_label ?? null,
+        subscriptions.length,
+        subscriptions,
+        totalsJson,
+      ]
+    : [
+        args.created_by,
+        args.group_structure_id,
+        args.period_label ?? null,
+        subscriptions.length,
+        subscriptions,
+        totalsJson,
+      ];
+
+  const res = await client.query(qtext, params);
 
   return res.rows[0] ?? null;
 }

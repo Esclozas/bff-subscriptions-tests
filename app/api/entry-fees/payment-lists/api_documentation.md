@@ -188,6 +188,7 @@ Note :
 
 ```json
 {
+  "payment_list_id": "uuid-optionnel",
   "created_by": "user_test",
   "group_structure_id": "uuid",
   "period_label": "2026-01",
@@ -204,6 +205,7 @@ Note :
 curl -s -X POST "$BASE/api/entry-fees/payment-lists" \
   -H "Content-Type: application/json" \
   -d '{
+    "payment_list_id": "4f76bdb6-0a45-4f9a-9a7f-b70cf49d0e5b",
     "created_by": "user_test",
     "group_structure_id": "c15d3aa5-ac24-42da-98f7-1a12d341818d",
     "period_label": "2026-01",
@@ -221,6 +223,11 @@ Réponse :
   "statements_count": 1
 }
 ```
+
+Notes :
+* `payment_list_id` est optionnel.
+* Si fourni, il devient **l’ID final** du Payment List (utile pour prévisualiser les vrais numéros).
+* Si l’ID existe déjà → `409 Conflict`.
 
 ---
 
@@ -254,13 +261,51 @@ Pour **CHAQUE souscription** :
 
 Permet de générer le JSON (ou le PDF) **avant** la création du Payment List / Statements.
 
+### ✅ Prévisualisation avec VRAIS numéros de statements (recommandé)
+
+👉 Le front génère un UUID `payment_list_id` **dès l’ouverture** de la modale.
+Tu l’envoies à la preview → les numéros retournés sont **exactement** ceux de la création finale.
+
+Numérotation déterministe (identique preview + création) :
+* ordre des statements = `group_key ASC` puis `currency ASC`
+* format = `PL-<payment_list_id_short>-<currency>-<index>`
+
 ### POST `/api/entry-fees/payment-lists/notices/preview`
+
+⚠️ **Sans fallback** : le front **doit** envoyer `subscription_snapshots`.
+Si absent → `400 Bad Request`.
+
+Champs requis par snapshot (minimum) :
+* `subscriptionId`
+* `teamId`
+* `amountCurrency`
+* `entry_fees_amount`
+
+Champs utiles pour l’UI :
+* `fundId`, `fundName`, `partId`, `partName`
+* `investorName`, `validationDate`
+* `teamName`
 
 ```bash
 curl -s -X POST "$BASE/api/entry-fees/payment-lists/notices/preview" \
   -H "Content-Type: application/json" \
   -d '{
-    "subscription_ids": ["uuid1", "uuid2"],
+    "payment_list_id": "4f76bdb6-0a45-4f9a-9a7f-b70cf49d0e5b",
+    "subscription_snapshots": [
+      {
+        "subscriptionId": "uuid1",
+        "teamId": "uuid-team",
+        "teamName": "B4",
+        "amountCurrency": "EUR",
+        "entry_fees_amount": 120.5,
+        "fundId": "uuid-fund",
+        "fundName": "Fund A",
+        "partId": "uuid-part",
+        "partName": "Part A",
+        "investorName": "Doe",
+        "validationDate": "2026-02-01T10:00:00.000Z"
+      }
+    ],
     "group_structure_id": "uuid-optionnel",
     "issue_date": "2024-05-19"
   }' | jq .
@@ -269,7 +314,9 @@ curl -s -X POST "$BASE/api/entry-fees/payment-lists/notices/preview" \
 Réponse :
 * `notice.status = "DRAFT"`
 * `notice.statementId = null`
-* `notice.paymentListId = null`
+* `notice.paymentListId = payment_list_id` (si fourni)
+* `notice.number` = numéro **final** si `payment_list_id` est fourni,
+  sinon numéro **DRAFT**
 
 ### POST `/api/entry-fees/payment-lists/notices/preview/render`
 
@@ -279,7 +326,16 @@ Génère le PDF via Carbone et stocke dans Supabase (bucket preview).
 curl -s -X POST "$BASE/api/entry-fees/payment-lists/notices/preview/render" \
   -H "Content-Type: application/json" \
   -d '{
-    "subscription_ids": ["uuid1", "uuid2"],
+    "payment_list_id": "4f76bdb6-0a45-4f9a-9a7f-b70cf49d0e5b",
+    "subscription_snapshots": [
+      {
+        "subscriptionId": "uuid1",
+        "teamId": "uuid-team",
+        "teamName": "B4",
+        "amountCurrency": "EUR",
+        "entry_fees_amount": 120.5
+      }
+    ],
     "group_structure_id": "uuid-optionnel",
     "issue_date": "2024-05-19",
     "preview_expires_in": 3600
