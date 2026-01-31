@@ -121,7 +121,16 @@ export async function POST(req: NextRequest) {
     const snapshots = body.subscription_snapshots ?? null;
     const subscriptionIds = snapshots?.length
       ? snapshots.map((s) => s.subscriptionId)
-      : body.subscriptions;
+      : (body.subscriptions ?? []);
+
+    if (!subscriptionIds.length) {
+      return withCors(
+        NextResponse.json(
+          { message: 'Either subscription_snapshots[] or subscriptions[] is required' },
+          { status: 400 },
+        ),
+      );
+    }
 
     // 1) Déterminer les totals annoncés
     let totalsToInsert: Array<{ currency: string; total_announced: string }> = [];
