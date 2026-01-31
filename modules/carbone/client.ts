@@ -20,6 +20,10 @@ export async function renderCarbonePdf(templateId: string, data: any) {
   const renderTarget = templateId;
   const carboneVersion = process.env.CARBONE_API_VERSION ?? '5';
 
+  const carboneLang = process.env.CARBONE_LANG ?? 'fr';
+  const payload: Record<string, unknown> = { data, convertTo: 'pdf' };
+  if (carboneLang) payload.lang = carboneLang;
+
   const res = await fetch(`${CARBONE_BASE_URL}/render/${renderTarget}`, {
     method: 'POST',
     headers: {
@@ -27,7 +31,7 @@ export async function renderCarbonePdf(templateId: string, data: any) {
       'Content-Type': 'application/json',
       'carbone-version': carboneVersion,
     },
-    body: JSON.stringify({ data, convertTo: 'pdf' }),
+    body: JSON.stringify(payload),
     cache: 'no-store',
   });
 
