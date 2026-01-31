@@ -255,7 +255,7 @@ Notes :
 * `notice.status="FINAL"` pour les statements (les previews utilisent `DRAFT`)
 * si `SUPABASE_BUCKET_PUBLIC=true` → URL publique sans expiration
 * sinon → URL signée (expiration via `preview_expires_in` ou `SUPABASE_SIGNED_URL_EXPIRES`)
-* Carbone : si `CARBONE_TEMPLATE_VERSION_ID` est défini, il est utilisé en priorité (recommandé avec clés test)
+* Carbone : on utilise **toujours** `CARBONE_TEMPLATE_ID` (API v5). La version rendue dépend du template “déployé/published” côté Carbone.
 * Previews : bucket dédié via `SUPABASE_PREVIEW_BUCKET` + `SUPABASE_PREVIEW_BUCKET_PUBLIC`
 * Les champs `notice_pdf_generated_at`, `notice_pdf_path`, `notice_pdf_file_name`, `notice_pdf_bucket` sont stockés au premier rendu et **jamais écrasés**.
 * `notice_pdf_path` est un chemin **technique** stable (ex: `notices/{statement_id}.pdf`) ; le nom lisible UI est `notice_pdf_file_name`.

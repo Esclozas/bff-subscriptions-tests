@@ -17,14 +17,15 @@ function getApiKey() {
 export async function renderCarbonePdf(templateId: string, data: any) {
   if (!templateId) throw new Error('CARBONE_TEMPLATE_ID is missing');
 
-  const versionId = process.env.CARBONE_TEMPLATE_VERSION_ID ?? '';
-  const renderTarget = versionId || templateId;
+  const renderTarget = templateId;
+  const carboneVersion = process.env.CARBONE_API_VERSION ?? '5';
 
   const res = await fetch(`${CARBONE_BASE_URL}/render/${renderTarget}`, {
     method: 'POST',
     headers: {
       Authorization: getApiKey(),
       'Content-Type': 'application/json',
+      'carbone-version': carboneVersion,
     },
     body: JSON.stringify({ data, convertTo: 'pdf' }),
     cache: 'no-store',
