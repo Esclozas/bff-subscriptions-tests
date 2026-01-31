@@ -21,8 +21,8 @@ export async function renderCarbonePdf(templateId: string, data: any) {
   const carboneVersion = process.env.CARBONE_API_VERSION ?? '5';
 
   const carboneLang = process.env.CARBONE_LANG ?? 'fr';
-  const payload: Record<string, unknown> = { data, convertTo: 'pdf' };
-  if (carboneLang) payload.lang = carboneLang;
+  const requestBody: Record<string, unknown> = { data, convertTo: 'pdf' };
+  if (carboneLang) requestBody.lang = carboneLang;
 
   const res = await fetch(`${CARBONE_BASE_URL}/render/${renderTarget}`, {
     method: 'POST',
@@ -31,7 +31,7 @@ export async function renderCarbonePdf(templateId: string, data: any) {
       'Content-Type': 'application/json',
       'carbone-version': carboneVersion,
     },
-    body: JSON.stringify(payload),
+    body: JSON.stringify(requestBody),
     cache: 'no-store',
   });
 
