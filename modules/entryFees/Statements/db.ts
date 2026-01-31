@@ -37,6 +37,10 @@ export type StatementRow = {
   created_at: string;
   paid_at: string | null;
   cancelled_at: string | null;
+  notice_pdf_generated_at?: string | null;
+  notice_pdf_path?: string | null;
+  notice_pdf_file_name?: string | null;
+  notice_pdf_bucket?: string | null;
   subscriptions_count?: number;
 };
 
@@ -110,6 +114,10 @@ export async function listStatements(args: {
       created_at,
       paid_at,
       cancelled_at,
+      notice_pdf_generated_at,
+      notice_pdf_path,
+      notice_pdf_file_name,
+      notice_pdf_bucket,
       (
         SELECT COUNT(*)::int
         FROM ${sql.unsafe(T_LINE)} ss
@@ -152,6 +160,10 @@ export async function getStatement(statementId: string) {
       s.created_at,
       s.paid_at,
       s.cancelled_at,
+      s.notice_pdf_generated_at,
+      s.notice_pdf_path,
+      s.notice_pdf_file_name,
+      s.notice_pdf_bucket,
       (
         SELECT COUNT(*)::int
         FROM ${sql.unsafe(T_LINE)} ss
@@ -212,6 +224,10 @@ export async function updateStatementPaymentStatus(statementId: string, newStatu
       s.created_at,
       s.paid_at,
       s.cancelled_at,
+      s.notice_pdf_generated_at,
+      s.notice_pdf_path,
+      s.notice_pdf_file_name,
+      s.notice_pdf_bucket,
       (
         SELECT COUNT(*)::int
         FROM ${sql.unsafe(T_LINE)} ss
@@ -241,6 +257,10 @@ export async function updateStatementsPaymentStatusBatch(
       created_at,
       paid_at,
       cancelled_at,
+      notice_pdf_generated_at,
+      notice_pdf_path,
+      notice_pdf_file_name,
+      notice_pdf_bucket,
       (
         SELECT COUNT(*)::int
         FROM ${T_LINE} ss
@@ -273,6 +293,10 @@ export async function updateStatementsPaymentStatusBatch(
       created_at,
       paid_at,
       cancelled_at,
+      notice_pdf_generated_at,
+      notice_pdf_path,
+      notice_pdf_file_name,
+      notice_pdf_bucket,
       (
         SELECT COUNT(*)::int
         FROM ${T_LINE} ss
@@ -322,6 +346,24 @@ export async function updateStatementsPaymentStatusBatch(
   }
 }
 
+export async function markStatementNoticeGenerated(args: {
+  statementId: string;
+  path: string;
+  fileName: string;
+  bucket?: string | null;
+}) {
+  const sql = getSql();
+  await sql`
+    UPDATE ${sql.unsafe(T_STATEMENT)}
+    SET
+      notice_pdf_generated_at = COALESCE(notice_pdf_generated_at, NOW()),
+      notice_pdf_path = COALESCE(notice_pdf_path, ${args.path}),
+      notice_pdf_file_name = COALESCE(notice_pdf_file_name, ${args.fileName}),
+      notice_pdf_bucket = COALESCE(notice_pdf_bucket, ${args.bucket ?? null})
+    WHERE id = ${args.statementId}::uuid
+  `;
+}
+
 /**
  * CANCEL = transaction:
  *  - lock statement row
@@ -353,6 +395,10 @@ export async function cancelStatementWithEvent(statementId: string, reason?: str
         created_at,
         paid_at,
         cancelled_at,
+        notice_pdf_generated_at,
+        notice_pdf_path,
+        notice_pdf_file_name,
+        notice_pdf_bucket,
         (
           SELECT COUNT(*)::int
           FROM ${T_LINE} ss
@@ -395,6 +441,10 @@ export async function cancelStatementWithEvent(statementId: string, reason?: str
         created_at,
         paid_at,
         cancelled_at,
+        notice_pdf_generated_at,
+        notice_pdf_path,
+        notice_pdf_file_name,
+        notice_pdf_bucket,
         (
           SELECT COUNT(*)::int
           FROM ${T_LINE} ss

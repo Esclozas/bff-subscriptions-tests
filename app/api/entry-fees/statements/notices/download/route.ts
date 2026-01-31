@@ -11,6 +11,7 @@ import {
   shouldUsePublicUrl,
   uploadPdf,
 } from '@/modules/supabase/storage';
+import { getStatement, markStatementNoticeGenerated } from '@/modules/entryFees/Statements/db';
 
 const BodySchema = z.object({
   statement_ids: z.array(z.string().uuid()).min(1).max(25),
@@ -40,24 +41,42 @@ export async function POST(req: NextRequest) {
   }> = [];
 
   for (const statementId of parsed.data.statement_ids) {
+    const statement = await getStatement(statementId);
+    if (!statement) {
+      return withCors(NextResponse.json({ message: 'Not Found', statementId }, { status: 404 }));
+    }
+
     const notice = await buildStatementNotice(req, statementId);
     if (!notice) {
       return withCors(NextResponse.json({ message: 'Not Found', statementId }, { status: 404 }));
     }
 
-    const fileName = buildNoticeFileName(notice.notice, notice.distributor);
-    const filePath = `notices/${fileName}`;
+    const computedFileName = buildNoticeFileName(notice.notice, notice.distributor);
+    const canonicalFilePath = `notices/${statementId}.pdf`;
+    const bucket = statement.notice_pdf_bucket ?? process.env.SUPABASE_BUCKET ?? null;
+    const fileName = statement.notice_pdf_file_name ?? computedFileName;
+    const legacyFilePath = `notices/${fileName}`;
+    const filePath =
+      statement.notice_pdf_path ?? (statement.notice_pdf_generated_at ? legacyFilePath : canonicalFilePath);
 
-    const pdf = await renderCarbonePdf(templateId, notice);
-    await uploadPdf(filePath, pdf);
+    if (!statement.notice_pdf_generated_at) {
+      const pdf = await renderCarbonePdf(templateId, notice);
+      const uploaded = await uploadPdf(filePath, pdf, bucket ?? undefined);
+      await markStatementNoticeGenerated({
+        statementId,
+        path: uploaded.path ?? filePath,
+        fileName,
+        bucket: uploaded.bucket ?? bucket ?? null,
+      });
+    }
 
     let previewUrl: string | null = null;
     let expiresAt: string | null = null;
 
     if (usePublicUrl) {
-      previewUrl = getPublicUrl(filePath);
+      previewUrl = getPublicUrl(filePath, bucket ?? undefined);
     } else {
-      const signed = await createSignedUrl(filePath, previewExpiresIn);
+      const signed = await createSignedUrl(filePath, previewExpiresIn, bucket ?? undefined);
       previewUrl = signed.previewUrl;
       expiresAt = signed.expiresAt;
     }

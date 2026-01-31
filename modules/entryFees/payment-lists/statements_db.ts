@@ -153,7 +153,11 @@ export async function listStatementsByPaymentListId(paymentListId: string) {
       payment_status,
       currency,
       total_amount::text AS total_amount,
-      created_at
+      created_at,
+      notice_pdf_generated_at,
+      notice_pdf_path,
+      notice_pdf_file_name,
+      notice_pdf_bucket
     FROM public.entry_fees_statement
     WHERE entry_fees_payment_list_id = $1::uuid
     ORDER BY created_at ASC

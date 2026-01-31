@@ -242,7 +242,11 @@ Réponse :
       "payment_status": "UNPAID",
       "currency": "EUR",
       "total_amount": "400.00",
-      "created_at": "2026-01-30T10:13:00.000Z"
+      "created_at": "2026-01-30T10:13:00.000Z",
+      "notice_pdf_generated_at": null,
+      "notice_pdf_path": null,
+      "notice_pdf_file_name": null,
+      "notice_pdf_bucket": null
     }
   ]
 }
@@ -254,6 +258,7 @@ Notes :
 * `subscriptions` **ou** `subscription_snapshots` sont requis (au moins un).
 * Si `subscription_snapshots` est fourni, l’API **n’appelle pas** `/api/subscriptions/all`.
   → totals + statements calculés directement depuis les snapshots (plus rapide).
+* Les `statements` incluent aussi `notice_pdf_generated_at`, `notice_pdf_path`, `notice_pdf_file_name`, `notice_pdf_bucket`.
 
 Notes :
 * `payment_list_id` est optionnel.

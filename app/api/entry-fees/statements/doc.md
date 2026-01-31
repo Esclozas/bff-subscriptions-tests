@@ -20,6 +20,7 @@ Cette API respecte un modèle **snapshot + historique immuable**, adapté aux ob
 - L’annulation est une **action métier transactionnelle** (avec impact payment list)
 - Aucun DELETE : on annule via `issue_status = CANCELLED`
 - Auto-PAID à la création si `total_amount=0` (toutes lignes à 0) → `payment_status=PAID` + `paid_at=now()`
+- Le PDF notice est **généré une seule fois** puis réutilisé (pas de re-création)
 
 ---
 
@@ -40,6 +41,10 @@ Cette API respecte un modèle **snapshot + historique immuable**, adapté aux ob
 | `created_at` | Date de création |
 | `paid_at` | Date de paiement (null si UNPAID) |
 | `cancelled_at` | Date d’annulation (null si non annulé) |
+| `notice_pdf_generated_at` | Date de génération du PDF (null si non généré) |
+| `notice_pdf_path` | Chemin storage du PDF (immutable) |
+| `notice_pdf_file_name` | Nom de fichier (immutable) |
+| `notice_pdf_bucket` | Bucket storage (immutable) |
 
 Contrainte :
 ```
@@ -107,7 +112,11 @@ Retourne une liste paginée par **cursor**, avec **total global**.
       "total_amount": "4000",
       "created_at": "2025-03-05T10:13:00.000Z",
       "paid_at": null,
-      "cancelled_at": null
+      "cancelled_at": null,
+      "notice_pdf_generated_at": null,
+      "notice_pdf_path": null,
+      "notice_pdf_file_name": null,
+      "notice_pdf_bucket": null
     }
   ],
   "total": 4,
@@ -137,7 +146,11 @@ Retourne le document financier figé.
   "total_amount": "4000",
   "created_at": "2025-03-05T10:13:00.000Z",
   "paid_at": null,
-  "cancelled_at": null
+  "cancelled_at": null,
+  "notice_pdf_generated_at": null,
+  "notice_pdf_path": null,
+  "notice_pdf_file_name": null,
+  "notice_pdf_bucket": null
 }
 ```
 
@@ -226,14 +239,17 @@ Retourne le JSON “notice” pour le template Carbone.
 ### `POST /api/entry-fees/statements/{statementId}/notice/render`
 
 Génère un PDF via Carbone, stocke dans Supabase et renvoie l’URL de preview.
+Si le PDF existe déjà (`notice_pdf_generated_at`), **aucune re-génération** : on renvoie l’URL existante.
 
 ### `GET /api/entry-fees/statements/{statementId}/notice/download`
 
 Téléchargement direct du PDF (génère + upload si besoin).
+Si le PDF existe déjà, il est servi directement depuis le storage.
 
 ### `POST /api/entry-fees/statements/notices/download`
 
 Batch : renvoie une liste d’URLs de PDFs générés.
+Les fichiers déjà générés ne sont pas re-créés.
 
 Notes :
 * `notice.status="FINAL"` pour les statements (les previews utilisent `DRAFT`)
@@ -241,6 +257,8 @@ Notes :
 * sinon → URL signée (expiration via `preview_expires_in` ou `SUPABASE_SIGNED_URL_EXPIRES`)
 * Carbone : si `CARBONE_TEMPLATE_VERSION_ID` est défini, il est utilisé en priorité (recommandé avec clés test)
 * Previews : bucket dédié via `SUPABASE_PREVIEW_BUCKET` + `SUPABASE_PREVIEW_BUCKET_PUBLIC`
+* Les champs `notice_pdf_generated_at`, `notice_pdf_path`, `notice_pdf_file_name`, `notice_pdf_bucket` sont stockés au premier rendu et **jamais écrasés**.
+* `notice_pdf_path` est un chemin **technique** stable (ex: `notices/{statement_id}.pdf`) ; le nom lisible UI est `notice_pdf_file_name`.
 
 ---
 

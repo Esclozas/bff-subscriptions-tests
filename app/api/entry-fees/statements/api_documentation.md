@@ -50,6 +50,7 @@ BASE="http://localhost:3000"
 * ❌ Pas de DELETE → on annule via `/cancel`
 * ✅ Annulation = **event négatif sur payment list**
 * ✅ Auto-PAID à la création si `total_amount=0` (toutes lignes à 0) → `payment_status=PAID` + `paid_at=now()`
+* ✅ PDF notice : **généré une seule fois**, stocké et **jamais réécrit**
 
 ---
 
@@ -109,6 +110,7 @@ Notes :
 * `subscriptions_count` est inclus dans chaque item (nombre de souscriptions liées au statement).
 * `paid_at` est renseigné quand `payment_status=PAID`, vidé quand `UNPAID`.
 * `cancelled_at` est renseigné quand `issue_status=CANCELLED`.
+* `notice_pdf_generated_at` / `notice_pdf_path` / `notice_pdf_file_name` / `notice_pdf_bucket` indiquent si le PDF notice existe déjà.
 
 ---
 
@@ -134,6 +136,10 @@ Retour :
   "created_at": "2025-03-05T10:13:00.000Z",
   "paid_at": null,
   "cancelled_at": null,
+  "notice_pdf_generated_at": null,
+  "notice_pdf_path": null,
+  "notice_pdf_file_name": null,
+  "notice_pdf_bucket": null,
   "subscriptions_count": 8
 }
 ```
@@ -263,6 +269,7 @@ curl -s "$BASE/api/entry-fees/statements/{STATEMENT_ID}/notice" | jq .
 ### POST `/api/entry-fees/statements/:id/notice/render`
 
 Génère un PDF via Carbone, stocke dans Supabase et renvoie l’URL de preview.
+Si le PDF existe déjà (`notice_pdf_generated_at`), l’API **ne re-génère pas** : elle renvoie simplement l’URL.
 
 ```bash
 curl -s -X POST "$BASE/api/entry-fees/statements/{STATEMENT_ID}/notice/render" \
@@ -270,9 +277,27 @@ curl -s -X POST "$BASE/api/entry-fees/statements/{STATEMENT_ID}/notice/render" \
   -d '{ "preview_expires_in": 3600 }' | jq .
 ```
 
+Exemple de réponse :
+
+```json
+{
+  "notice": { "...": "..." },
+  "already_generated": true,
+  "file": {
+    "bucket": "bucket-name",
+    "path": "notices/PL-XXX.pdf",
+    "file_name": "PL-XXX.pdf",
+    "preview_url": "https://...",
+    "expires_at": "2025-01-01T12:00:00.000Z",
+    "public": false
+  }
+}
+```
+
 ### GET `/api/entry-fees/statements/:id/notice/download`
 
 Télécharge le PDF (génère + upload si besoin).
+Si le PDF existe déjà, il est simplement servi depuis le storage.
 
 ```bash
 curl -s -OJ "$BASE/api/entry-fees/statements/{STATEMENT_ID}/notice/download"
@@ -281,6 +306,7 @@ curl -s -OJ "$BASE/api/entry-fees/statements/{STATEMENT_ID}/notice/download"
 ### POST `/api/entry-fees/statements/notices/download`
 
 Batch : génère plusieurs PDFs et renvoie une liste d’URLs.
+Les fichiers déjà générés ne sont pas re-créés.
 
 ```bash
 curl -s -X POST "$BASE/api/entry-fees/statements/notices/download" \
@@ -294,6 +320,8 @@ Notes :
 * sinon → URL signée (expiration via `preview_expires_in` ou `SUPABASE_SIGNED_URL_EXPIRES`)
 * Carbone : si `CARBONE_TEMPLATE_VERSION_ID` est défini, il est utilisé en priorité (recommandé avec clés test)
 * Previews : bucket dédié via `SUPABASE_PREVIEW_BUCKET` + `SUPABASE_PREVIEW_BUCKET_PUBLIC`
+* Les champs `notice_pdf_generated_at`, `notice_pdf_path`, `notice_pdf_file_name`, `notice_pdf_bucket` sont stockés au premier rendu et **jamais écrasés**.
+* Nouveau stockage : `notice_pdf_path` est **technique** et stable (ex: `notices/{statement_id}.pdf`), tandis que `notice_pdf_file_name` reste le nom lisible pour l’UI.
 
 ---
 
