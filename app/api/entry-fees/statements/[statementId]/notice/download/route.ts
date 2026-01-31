@@ -48,6 +48,15 @@ export async function GET(req: NextRequest, context: Ctx) {
       fileUrl = signed.previewUrl;
     }
 
+    if (!fileUrl) {
+      return withCors(
+        NextResponse.json(
+          { message: 'Notice PDF URL not available', statementId },
+          { status: 404 },
+        ),
+      );
+    }
+
     const fileRes = await fetch(fileUrl, { cache: 'no-store' });
     if (!fileRes.ok) {
       return withCors(
