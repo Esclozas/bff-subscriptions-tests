@@ -276,7 +276,7 @@ export async function buildDraftNotices(req: Request, args: DraftNoticesArgs): P
       let resolvedBy: StatementNotice['distributor']['resolvedBy'] =
         group.mappingUsed ? 'group_structure_map' : 'fallback_source_group';
 
-      if (!distributorName && sourceGroup?.name && !group.mappingUsed) {
+      if (!distributorName && sourceGroup?.name) {
         distributorName = sourceGroup.name;
         resolvedBy = 'fallback_source_group';
       }

@@ -197,7 +197,7 @@ export async function buildStatementNotice(req: Request, statementId: string) {
   const teamsById = indexTeamsById(teams);
 
   let resolvedBy: DistributorInfo['resolvedBy'] = 'fallback_source_group';
-  const distributorId = notice.groupKey || sourceGroup?.id || null;
+  let distributorId = notice.groupKey || sourceGroup?.id || null;
   let distributorName = distributorId ? teamsById.get(distributorId)?.name ?? null : null;
 
   if (notice.groupStructureId && sourceGroup?.id) {
@@ -205,6 +205,7 @@ export async function buildStatementNotice(req: Request, statementId: string) {
     const mapping = mappings.find((m) => m.source_group_id === sourceGroup?.id);
     if (mapping) {
       resolvedBy = 'group_structure_map';
+      distributorId = mapping.billing_group_id ?? distributorId;
       distributorName = teamsById.get(distributorId ?? '')?.name ?? distributorName;
     }
   }
