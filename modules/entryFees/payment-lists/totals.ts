@@ -5,6 +5,14 @@ type FlatSub = {
   entry_fees_assigned_amount_total: number | null;
 };
 
+type SnapshotSub = {
+  subscriptionId: string | null;
+  amountCurrency: string | null;
+  entry_fees_amount: number | string | null;
+  entry_fees_amount_total?: number | string | null;
+  entry_fees_assigned_amount_total?: number | string | null;
+};
+
 /**
  * Stratégie simple:
  * - Appelle /api/subscriptions/all (BFF) une fois
@@ -45,6 +53,37 @@ export async function computeAnnouncedTotalsFromBff(args: {
   }
 
   // numeric -> string (2 décimales) pour insertion en DB
+  return Array.from(byCur.entries()).map(([currency, sum]) => ({
+    currency,
+    total_announced: sum.toFixed(2),
+  }));
+}
+
+function toNumber(value: string | number | null | undefined) {
+  if (value == null) return 0;
+  const n = typeof value === 'number' ? value : Number(String(value).replace(',', '.'));
+  return Number.isFinite(n) ? n : 0;
+}
+
+/**
+ * Stratégie snapshots:
+ * - utilise entry_fees_assigned_amount_total si fourni
+ * - sinon entry_fees_amount_total
+ * - sinon entry_fees_amount
+ */
+export function computeAnnouncedTotalsFromSnapshots(snapshots: SnapshotSub[]) {
+  const byCur = new Map<string, number>();
+
+  for (const s of snapshots) {
+    const cur = s.amountCurrency ?? 'EUR';
+    const amount =
+      toNumber(s.entry_fees_assigned_amount_total ?? null) ||
+      toNumber(s.entry_fees_amount_total ?? null) ||
+      toNumber(s.entry_fees_amount ?? null);
+
+    byCur.set(cur, (byCur.get(cur) ?? 0) + amount);
+  }
+
   return Array.from(byCur.entries()).map(([currency, sum]) => ({
     currency,
     total_announced: sum.toFixed(2),

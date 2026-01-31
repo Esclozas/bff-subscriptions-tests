@@ -3,9 +3,9 @@ export const runtime = 'nodejs';
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { withCors, handleOptions } from '@/lib/cors';
-import { computeAnnouncedTotalsFromBff } from '@/modules/entryFees/payment-lists/totals';
+import { computeAnnouncedTotalsFromBff, computeAnnouncedTotalsFromSnapshots } from '@/modules/entryFees/payment-lists/totals';
 import { withTx, createPaymentListAtomicTx, listPaymentLists } from '@/modules/entryFees/payment-lists/db';
-import { generateStatementsAtomicTx } from '@/modules/entryFees/payment-lists/statements';
+import { generateStatementsAtomicTx, generateStatementsFromSnapshotsAtomicTx } from '@/modules/entryFees/payment-lists/statements';
 
 
 
@@ -16,13 +16,24 @@ function cookieHeaderFrom(req: NextRequest) {
   return '';
 }
 
+const SnapshotSchema = z.object({
+  subscriptionId: z.string().uuid(),
+  teamId: z.string().uuid().nullable(),
+  teamName: z.string().nullable().optional(),
+  amountCurrency: z.string().nullable(),
+  entry_fees_amount: z.coerce.number().nullable(),
+  entry_fees_amount_total: z.coerce.number().nullable().optional(),
+  entry_fees_assigned_amount_total: z.coerce.number().nullable().optional(),
+});
+
 const CreateBodySchema = z.object({
   payment_list_id: z.string().uuid().optional(),
   created_by: z.string().min(1),
   group_structure_id: z.string().uuid(),
   period_label: z.string().nullable().optional(),
 
-  subscriptions: z.array(z.string().uuid()).min(1),
+  subscriptions: z.array(z.string().uuid()).min(1).optional(),
+  subscription_snapshots: z.array(SnapshotSchema).min(1).optional(),
 
   // style A
   totals: z
@@ -41,6 +52,35 @@ const CreateBodySchema = z.object({
 
   // Optionnel: renvoyer les statements créés dans la réponse
   include_statements: z.boolean().optional(),
+}).superRefine((data, ctx) => {
+  if (!data.subscription_snapshots?.length && !data.subscriptions?.length) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: 'Either subscription_snapshots[] or subscriptions[] is required',
+      path: ['subscription_snapshots'],
+    });
+  }
+  if (data.subscription_snapshots?.length && data.subscriptions?.length) {
+    const snapIds = new Set(data.subscription_snapshots.map((s) => s.subscriptionId));
+    const subIds = new Set(data.subscriptions);
+    if (snapIds.size !== subIds.size) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'subscription_snapshots and subscriptions must match',
+        path: ['subscription_snapshots'],
+      });
+    }
+    for (const id of snapIds) {
+      if (!subIds.has(id)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: 'subscription_snapshots and subscriptions must match',
+          path: ['subscription_snapshots'],
+        });
+        break;
+      }
+    }
+  }
 });
 
 export async function GET(req: NextRequest) {
@@ -78,19 +118,26 @@ export async function POST(req: NextRequest) {
     }
 
     const body = parsed.data;
+    const snapshots = body.subscription_snapshots ?? null;
+    const subscriptionIds = snapshots?.length
+      ? snapshots.map((s) => s.subscriptionId)
+      : body.subscriptions;
 
     // 1) Déterminer les totals annoncés
     let totalsToInsert: Array<{ currency: string; total_announced: string }> = [];
 
     if (body.compute_totals) {
-      const origin = req.nextUrl.origin;
-      const cookie = cookieHeaderFrom(req);
-
-      totalsToInsert = await computeAnnouncedTotalsFromBff({
-        origin,
-        subscriptionIds: body.subscriptions,
-        cookieHeader: cookie,
-      });
+      if (snapshots?.length) {
+        totalsToInsert = computeAnnouncedTotalsFromSnapshots(snapshots);
+      } else {
+        const origin = req.nextUrl.origin;
+        const cookie = cookieHeaderFrom(req);
+        totalsToInsert = await computeAnnouncedTotalsFromBff({
+          origin,
+          subscriptionIds,
+          cookieHeader: cookie,
+        });
+      }
 
       if (!totalsToInsert.length) {
         return withCors(
@@ -134,7 +181,7 @@ export async function POST(req: NextRequest) {
           AND s.issue_status <> 'CANCELLED'
         LIMIT 20
         `,
-        [body.subscriptions],
+        [subscriptionIds],
       );
 
       if (conflict.rows.length > 0) {
@@ -147,11 +194,11 @@ export async function POST(req: NextRequest) {
         created_by: body.created_by,
         group_structure_id: body.group_structure_id,
         period_label: body.period_label ?? null,
-        subscriptions: body.subscriptions,
+        subscriptions: subscriptionIds,
         totals: totalsToInsert.map((t) => ({
         currency: t.currency,
         total_announced: t.total_announced,
-        subscriptions_count: body.subscriptions.length,
+        subscriptions_count: subscriptionIds.length,
         statements_count: 0,
         })),
     });
@@ -159,12 +206,18 @@ export async function POST(req: NextRequest) {
     if (!pl?.id) throw new Error('DB_FAILURE_PAYMENT_LIST_NOT_CREATED');
 
     // 2) génère les statements (dans la MÊME transaction)
-    const statementsRes = await generateStatementsAtomicTx(client, {
-        origin: req.nextUrl.origin,
-        paymentListId: pl.id,
-        groupStructureId: pl.group_structure_id,
-        subscriptionIds: body.subscriptions,
-    });
+    const statementsRes = snapshots?.length
+      ? await generateStatementsFromSnapshotsAtomicTx(client, {
+          paymentListId: pl.id,
+          groupStructureId: pl.group_structure_id,
+          snapshots,
+        })
+      : await generateStatementsAtomicTx(client, {
+          origin: req.nextUrl.origin,
+          paymentListId: pl.id,
+          groupStructureId: pl.group_structure_id,
+          subscriptionIds,
+        });
 
     return {
       ...pl,

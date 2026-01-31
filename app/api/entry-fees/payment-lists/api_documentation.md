@@ -193,6 +193,15 @@ Note :
   "group_structure_id": "uuid",
   "period_label": "2026-01",
   "subscriptions": ["uuid1", "uuid2"],
+  "subscription_snapshots": [
+    {
+      "subscriptionId": "uuid1",
+      "teamId": "uuid-team",
+      "amountCurrency": "EUR",
+      "entry_fees_amount": 120.5,
+      "entry_fees_amount_total": 120.5
+    }
+  ],
   "totals": [
     { "currency": "EUR", "announced_total": "300.00" }
   ],
@@ -242,6 +251,9 @@ Réponse :
 Notes :
 * `include_statements` est optionnel (par défaut `false`).
 * Si `true`, les statements créés sont renvoyés directement → évite un appel supplémentaire.
+* `subscriptions` **ou** `subscription_snapshots` sont requis (au moins un).
+* Si `subscription_snapshots` est fourni, l’API **n’appelle pas** `/api/subscriptions/all`.
+  → totals + statements calculés directement depuis les snapshots (plus rapide).
 
 Notes :
 * `payment_list_id` est optionnel.

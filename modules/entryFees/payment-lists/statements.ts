@@ -1,11 +1,19 @@
 import { createStatementsAndLinesTx } from './statements_db';
 import { buildStatementNumber, sortStatementGroups } from './statement_number';
+import { getActiveGroupStructure, getGroupStructureMap } from '@/modules/grouping/db';
 
 type FlattenedSub = {
   subscriptionId: string | null;
   amountCurrency: string | null;
   teamId: string | null;
   entry_fees_amount: number | null;
+};
+
+type SnapshotSub = {
+  subscriptionId: string;
+  amountCurrency: string | null;
+  teamId: string | null;
+  entry_fees_amount: number | string | null;
 };
 
 type GroupStructureActive = { id: string };
@@ -153,4 +161,96 @@ export async function generateStatementsAtomicTx(
     lines,
   });
 
+}
+
+export async function generateStatementsFromSnapshotsAtomicTx(
+  client: any,
+  args: {
+    paymentListId: string;
+    groupStructureId: string;
+    snapshots: SnapshotSub[];
+  }
+) {
+  const rows = (args.snapshots ?? []).filter((s) => s?.subscriptionId);
+  if (!rows.length) throw new Error('No matching subscriptions found in snapshots');
+
+  const active = await getActiveGroupStructure().catch(() => null);
+  if (active?.id && active.id !== args.groupStructureId) {
+    console.warn('[entryFees] group-structure mismatch:', {
+      activeId: active.id,
+      usedGroupStructureId: args.groupStructureId,
+    });
+  }
+
+  const mappings = await getGroupStructureMap(args.groupStructureId).catch(() => []);
+  const billingBySource = new Map<string, string>();
+  for (const m of mappings) {
+    if (m?.source_group_id && m?.billing_group_id) {
+      billingBySource.set(m.source_group_id, m.billing_group_id);
+    }
+  }
+
+  // validations strictes : currency + teamId + entry_fees_amount
+  for (const s of rows) {
+    if (!s.amountCurrency) throw new Error(`BAD_REQUEST_MISSING_CURRENCY subscriptionId=${s.subscriptionId}`);
+    if (!s.teamId) throw new Error(`BAD_REQUEST_MISSING_TEAM_ID subscriptionId=${s.subscriptionId}`);
+    getEntryFeesAmountAllowZero({
+      subscriptionId: s.subscriptionId,
+      amountCurrency: s.amountCurrency,
+      teamId: s.teamId,
+      entry_fees_amount: Number(s.entry_fees_amount ?? 0),
+    } as FlattenedSub);
+  }
+
+  // lines snapshot
+  const lines: Array<{
+    subscription_id: string;
+    currency: string;
+    group_key: string;
+    snapshot_total_amount: string;
+  }> = [];
+
+  for (const s of rows) {
+    const subscription_id = s.subscriptionId;
+    const currency = s.amountCurrency!.trim();
+    const teamId = s.teamId!;
+    const group_key = computeBillingGroupKey(teamId, billingBySource);
+    const amount = getEntryFeesAmountAllowZero({
+      subscriptionId: s.subscriptionId,
+      amountCurrency: s.amountCurrency,
+      teamId: s.teamId,
+      entry_fees_amount: Number(s.entry_fees_amount ?? 0),
+    } as FlattenedSub);
+
+    lines.push({
+      subscription_id,
+      currency,
+      group_key,
+      snapshot_total_amount: amount.toFixed(2),
+    });
+  }
+
+  // group (group_key, currency) => statements
+  const groupMap = new Map<string, { group_key: string; currency: string; total: number }>();
+  for (const l of lines) {
+    const key = `${l.group_key}__${l.currency}`;
+    const g = groupMap.get(key) ?? { group_key: l.group_key, currency: l.currency, total: 0 };
+    g.total += Number(l.snapshot_total_amount);
+    groupMap.set(key, g);
+  }
+
+  const sortedGroups = sortStatementGroups(Array.from(groupMap.values()));
+  const statements = sortedGroups.map((g, idx) => ({
+    group_key: g.group_key,
+    currency: g.currency,
+    statement_number: buildStatementNumber(args.paymentListId, g.currency, idx),
+    total_amount: g.total.toFixed(2),
+  }));
+
+  return createStatementsAndLinesTx(client, {
+    paymentListId: args.paymentListId,
+    snapshotSourceGroupId: args.groupStructureId,
+    statements,
+    lines,
+  });
 }
