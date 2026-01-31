@@ -150,7 +150,9 @@ export async function buildDraftNotices(req: Request, args: DraftNoticesArgs): P
   const hasTeamNames = snapshots.every(
     (s) => typeof s.teamName === 'string' && s.teamName.trim().length > 0,
   );
-  const skipTeams = args.skipTeamLookup === true || hasTeamNames;
+  const hasMappings = (mapPayload.mappings ?? []).length > 0;
+  // Si on a des mappings (parent groups), on garde le lookup teams pour récupérer le nom du parent.
+  const skipTeams = args.skipTeamLookup === true || (hasTeamNames && !hasMappings);
   const teams = await getCachedTeams(req, skipTeams);
   const teamsById = indexTeamsById(teams);
 
