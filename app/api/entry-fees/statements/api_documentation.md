@@ -38,6 +38,7 @@ BASE="http://localhost:3000"
 |   PATCH | /api/entry-fees/statements/:id               | Changement de payment_status uniquement |
 |    POST | /api/entry-fees/statements/payment-status/batch | Changement payment_status en batch   |
 |    POST | /api/entry-fees/statements/:id/cancel        | Annulation métier (transaction + event) |
+|    POST | /api/entry-fees/statements/cancel/batch      | Annulation batch (signal de fin)        |
 
 ---
 
@@ -422,6 +423,47 @@ Effets :
 | 404  | statement inexistant |
 | 409  | déjà annulé          |
 | 500  | échec transaction    |
+
+---
+
+## 📌 Annuler plusieurs statements (batch)
+
+### POST `/api/entry-fees/statements/cancel/batch`
+
+Body :
+
+```json
+{
+  "statement_ids": ["uuid1", "uuid2"],
+  "reason": "optional"
+}
+```
+
+Réponse :
+
+```json
+{
+  "done": true,
+  "cancelled_count": 2,
+  "already_cancelled_count": 1,
+  "not_found_count": 0,
+  "error_count": 0,
+  "payment_list_ids": ["pl1", "pl2"],
+  "results": [
+    {
+      "statement_id": "uuid1",
+      "status": "CANCELLED",
+      "payment_list_id": "pl1",
+      "issue_status": "CANCELLED",
+      "cancelled_at": "2026-02-01T10:00:00.000Z"
+    }
+  ]
+}
+```
+
+Notes :
+* `done=true` même si certaines annulations échouent.
+* `payment_list_ids` permet un refresh ciblé côté front.
 
 ---
 
