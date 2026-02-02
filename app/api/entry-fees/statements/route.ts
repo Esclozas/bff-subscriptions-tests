@@ -46,7 +46,15 @@ export async function GET(req: NextRequest) {
     cursor: q.cursor ?? null,
   });
 
-  return withCors(NextResponse.json({ items, total, nextCursor, limit }));
+  const enriched = items.map((item) => ({
+    ...item,
+    subscriptionsCount:
+      typeof (item as any).subscriptionsCount === 'number'
+        ? (item as any).subscriptionsCount
+        : (item as any).subscriptions_count ?? null,
+  }));
+
+  return withCors(NextResponse.json({ items: enriched, total, nextCursor, limit }));
 
 }
 

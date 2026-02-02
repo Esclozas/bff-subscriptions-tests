@@ -29,6 +29,7 @@ BASE="http://localhost:3000"
 |     GET | /api/entry-fees/statements                   | Liste des statements (metadata)         |
 |     GET | /api/entry-fees/statements/:id               | Détail d’un statement                   |
 |     GET | /api/entry-fees/statements/:id/subscriptions | Lignes + infos souscription (live)      |
+|    POST | /api/entry-fees/statements/subscriptions/batch | Lignes par statement (batch)         |
 |     GET | /api/entry-fees/statements/:id/summary       | Vue UI complète                         |
 |     GET | /api/entry-fees/statements/:id/notice        | JSON notice (Carbone)                   |
 |    POST | /api/entry-fees/statements/:id/notice/render | Génère PDF + upload storage             |
@@ -109,6 +110,7 @@ Réponse :
 Notes :
 
 * `subscriptions_count` est inclus dans chaque item (nombre de souscriptions liées au statement).
+* `subscriptionsCount` est aussi renvoyé (alias camelCase).
 * `paid_at` est renseigné quand `payment_status=PAID`, vidé quand `UNPAID`.
 * `cancelled_at` est renseigné quand `issue_status=CANCELLED`.
 * `notice_pdf_generated_at` / `notice_pdf_path` / `notice_pdf_file_name` / `notice_pdf_bucket` indiquent si le PDF notice existe déjà.
@@ -238,6 +240,31 @@ Notes :
 
 ```bash
 curl -s "$BASE/api/entry-fees/statements/{STATEMENT_ID}/summary" | jq .
+```
+
+---
+
+## 📌 Lignes par statement (batch)
+
+### POST `/api/entry-fees/statements/subscriptions/batch`
+
+Body :
+
+```json
+{
+  "statement_ids": ["uuid1", "uuid2"]
+}
+```
+
+Réponse :
+
+```json
+{
+  "by_statement_id": {
+    "uuid1": { "items": [ ... ], "total": 3 },
+    "uuid2": { "items": [ ... ], "total": 1 }
+  }
+}
 ```
 
 Retour :

@@ -45,6 +45,8 @@ Cette API respecte un modèle **snapshot + historique immuable**, adapté aux ob
 | `notice_pdf_path` | Chemin storage du PDF (immutable) |
 | `notice_pdf_file_name` | Nom de fichier (immutable) |
 | `notice_pdf_bucket` | Bucket storage (immutable) |
+| `subscriptions_count` | Nombre de souscriptions liées |
+| `subscriptionsCount` | Alias camelCase du count |
 
 Contrainte :
 ```
@@ -195,6 +197,31 @@ Retourne les **lignes figées** du statement + infos de souscription (live).
     }
   ],
   "total": 8
+}
+```
+
+---
+
+## 3b. Lignes par statement (batch)
+
+### `POST /api/entry-fees/statements/subscriptions/batch`
+
+Body :
+
+```json
+{
+  "statement_ids": ["uuid1", "uuid2"]
+}
+```
+
+Réponse :
+
+```json
+{
+  "by_statement_id": {
+    "uuid1": { "items": [ ... ], "total": 3 },
+    "uuid2": { "items": [ ... ], "total": 1 }
+  }
 }
 ```
 

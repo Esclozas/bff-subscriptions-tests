@@ -197,6 +197,26 @@ export async function getStatementLines(statementId: string) {
   return rows;
 }
 
+export async function getStatementLinesByStatementIds(statementIds: string[]) {
+  if (!statementIds.length) return [] as LineRow[];
+  const pool = getPool();
+  const { rows } = await pool.query(
+    `
+    SELECT
+      id,
+      entry_fees_statement_id,
+      subscription_id,
+      snapshot_source_group_id,
+      snapshot_total_amount
+    FROM ${T_LINE}
+    WHERE entry_fees_statement_id = ANY($1::uuid[])
+    ORDER BY entry_fees_statement_id ASC, subscription_id ASC
+    `,
+    [statementIds],
+  );
+  return rows as LineRow[];
+}
+
 /** PATCH payment_status uniquement */
 export async function updateStatementPaymentStatus(statementId: string, newStatus: PaymentStatus) {
   const sql = getSql();
