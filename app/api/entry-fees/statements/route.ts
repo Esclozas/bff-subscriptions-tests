@@ -46,13 +46,21 @@ export async function GET(req: NextRequest) {
     cursor: q.cursor ?? null,
   });
 
-  const enriched = items.map((item) => ({
-    ...item,
-    subscriptionsCount:
-      typeof (item as any).subscriptionsCount === 'number'
-        ? (item as any).subscriptionsCount
-        : (item as any).subscriptions_count ?? null,
-  }));
+  const enriched = items.map((item) => {
+    const raw = item as any;
+    const subscriptions_count =
+      typeof raw.subscriptions_count === 'number'
+        ? raw.subscriptions_count
+        : typeof raw.subscriptionsCount === 'number'
+          ? raw.subscriptionsCount
+          : null;
+
+    return {
+      ...item,
+      subscriptions_count,
+      subscriptionsCount: subscriptions_count,
+    };
+  });
 
   return withCors(NextResponse.json({ items: enriched, total, nextCursor, limit }));
 
