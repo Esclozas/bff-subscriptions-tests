@@ -229,6 +229,8 @@ Notes :
 
 * `snapshot_total_amount` = montant fige au moment du statement (valeur officielle).
 * `amount_value` / `amount_currency` = montant live de la souscription (peut differer).
+* `billing_group_id` / `billing_group_name` = groupe parent resolu (mapping + fallback source).
+* `group_name` = nom du groupe source (alias `team_name` quand dispo).
 
 ---
 

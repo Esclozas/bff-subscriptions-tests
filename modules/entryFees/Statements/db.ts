@@ -52,6 +52,12 @@ export type LineRow = {
   snapshot_total_amount: string | number;
 };
 
+export type StatementMetaRow = {
+  id: string;
+  group_key: string | null;
+  group_structure_id?: string | null;
+};
+
 export function encodeCursor(obj: any) {
   return Buffer.from(JSON.stringify(obj), 'utf8').toString('base64');
 }
@@ -215,6 +221,25 @@ export async function getStatementLinesByStatementIds(statementIds: string[]) {
     [statementIds],
   );
   return rows as LineRow[];
+}
+
+export async function getStatementsMetaByIds(statementIds: string[]) {
+  if (!statementIds.length) return [] as StatementMetaRow[];
+  const pool = getPool();
+  const { rows } = await pool.query(
+    `
+    SELECT
+      s.id,
+      s.group_key,
+      pl.group_structure_id
+    FROM ${T_STATEMENT} s
+    LEFT JOIN public.entry_fees_payment_list pl
+      ON pl.id = s.entry_fees_payment_list_id
+    WHERE s.id = ANY($1::uuid[])
+    `,
+    [statementIds],
+  );
+  return rows as StatementMetaRow[];
 }
 
 /** PATCH payment_status uniquement */

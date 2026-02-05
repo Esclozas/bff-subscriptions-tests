@@ -267,20 +267,10 @@ Réponse :
 }
 ```
 
-Retour :
+Notes :
 
-```json
-{
-  "statement": { ... },
-  "lines": [ ... ],
-  "totals": {
-    "statementTotalAmount": 4000,
-    "linesTotalAmount": 4000,
-    "linesCount": 8,
-    "mismatch": false
-  }
-}
-```
+* `billing_group_id` / `billing_group_name` sont ajoutés sur chaque item (groupe parent resolu).
+* `group_name` renseigne le nom du groupe source (alias `team_name` quand dispo).
 
 ---
 
