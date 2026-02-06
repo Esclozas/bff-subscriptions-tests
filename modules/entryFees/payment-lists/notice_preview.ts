@@ -29,6 +29,7 @@ type DraftNoticeGroup = {
 
 type SubscriptionSnapshot = {
   subscriptionId: string;
+  operationId?: string | null;
   amountCurrency: string | null;
   teamId: string | null;
   teamName?: string | null;
@@ -221,6 +222,7 @@ export async function buildDraftNotices(req: Request, args: DraftNoticesArgs): P
 
     existing.subscriptions.push({
       subscriptionId: sub.subscriptionId as string,
+      operationId: sub.operationId ?? null,
       investorName: sub.investorName ?? null,
       signatureDate: sub.validationDate ?? null,
       entryFeeAmount: toAmountString(amount),

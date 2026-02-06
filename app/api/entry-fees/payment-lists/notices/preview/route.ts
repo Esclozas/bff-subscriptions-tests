@@ -7,6 +7,7 @@ import { buildDraftNotices } from '@/modules/entryFees/payment-lists/notice_prev
 
 const SnapshotSchema = z.object({
   subscriptionId: z.string().uuid(),
+  operationId: z.string().nullable().optional(),
   teamId: z.string().uuid().nullable(),
   teamName: z.string().nullable().optional(),
   amountCurrency: z.string().nullable(),

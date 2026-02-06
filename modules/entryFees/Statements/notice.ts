@@ -38,6 +38,7 @@ export type FundPartTotals = {
 
 export type FundPartSubscription = {
   subscriptionId: string;
+  operationId: string | null;
   investorName: string | null;
   signatureDate: string | null;
   entryFeeAmount: string;
@@ -147,6 +148,7 @@ export async function buildStatementNotice(req: Request, statementId: string) {
 
     existing.subscriptions.push({
       subscriptionId: line.subscription_id,
+      operationId: sub?.operationId ?? null,
       investorName: sub?.investorName ?? null,
       signatureDate: sub?.validationDate ?? null,
       entryFeeAmount,
